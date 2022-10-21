@@ -1,0 +1,24 @@
+{
+  "devDependencies": {
+    "@types/fs-extra": "^9.0.13",
+    "@types/node": "^18.11.3",
+    "gts": "^3.1.1",
+    "typescript": "~4.8.4"
+  },
+  "scripts": {
+    "lint": "gts lint",
+    "clean": "gts clean",
+    "compile": "tsc",
+    "fix": "gts fix",
+    "prepare": "npm.cmd run compile",
+    "pretest": "npm.cmd run compile",
+    "posttest": "npm.cmd run lint"
+  },
+  "dependencies": {
+    "axios": "0.27.2",
+    "fs-extra": "^10.1.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
