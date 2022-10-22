@@ -8,6 +8,7 @@ import * as os from 'os';
 import * as proc from 'process';
 import {stderr, stdout} from 'process';
 import path = require('path');
+import * as yargs from 'yargs';
 // get https://ziglang.org/download/index.json
 
 const zigLsJsonUrl = 'https://ziglang.org/download/index.json';
@@ -204,9 +205,10 @@ async function main() {
   }
   fs.mkdirSync(versionPath, {recursive: true});
   const extractPath = path.join(os.tmpdir(), 'zvm', folderName);
-  if (!fs.existsSync(extractPath)) {
-    fs.mkdirSync(extractPath, {recursive: true});
+  if (fs.existsSync(extractPath)) {
+    fs.rmSync(extractPath, {recursive: true});
   }
+  fs.mkdirSync(extractPath, {recursive: true});
   console.log('Extracting', tarballPath, 'to', extractPath);
   // run `tar -xvzf tarballPath -C extractPath`
   const res = spawn('tar -xvzf ' + tarballPath + ' -C ' + extractPath, {
@@ -218,8 +220,9 @@ async function main() {
     res.on('close', resolve);
     res.on('error', reject);
     res.stdout.on('data', (data: Buffer) => {
-      out += data.toString();
-      stdout.write(data.toString());
+      const s = data.toString();
+      out += s;
+      stdout.write(s + '\r'.repeat(proc.stdout.columns - s.length));
     });
     res.stderr.on('data', (data: Buffer) => {
       err += data.toString();

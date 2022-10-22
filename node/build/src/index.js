@@ -5,6 +5,7 @@ const axios_1 = require("axios");
 const child_process_1 = require("child_process");
 const crypto = require("crypto");
 const fs = require("fs");
+const fse = require("fs-extra");
 const os = require("os");
 const proc = require("process");
 const process_1 = require("process");
@@ -111,14 +112,19 @@ async function main() {
         console.log('Downloaded', tarballPath);
     }
     // extract to temp dir
-    const tempFolder = `${version.version}-${cpuArch}-${platform}`;
+    const folderName = `${version.version}`;
     // move to zig dir
     const zigDir = path.join(os.homedir(), '.zvm');
     // check if zig dir exists
     if (!fs.existsSync(zigDir)) {
         fs.mkdirSync(zigDir);
     }
-    const extractPath = path.join(zigDir, 'versions', tempFolder);
+    const versionPath = path.join(zigDir, 'versions', folderName);
+    if (fs.existsSync(versionPath)) {
+        fs.rmSync(versionPath, { recursive: true });
+    }
+    fs.mkdirSync(versionPath, { recursive: true });
+    const extractPath = path.join(os.tmpdir(), 'zvm', folderName);
     if (fs.existsSync(extractPath)) {
         fs.rmSync(extractPath, { recursive: true });
     }
@@ -128,22 +134,45 @@ async function main() {
     const res = (0, child_process_1.spawn)('tar -xvzf ' + tarballPath + ' -C ' + extractPath, {
         shell: true,
     });
+    let out = '';
+    let err = '';
     await new Promise((resolve, reject) => {
-        res.on('exit', resolve);
+        res.on('close', resolve);
         res.on('error', reject);
+        res.stdout.on('data', (data) => {
+            const s = data.toString();
+            out += s;
+            process_1.stdout.write(s + '\r'.repeat(proc.stdout.columns - s.length));
+        });
+        res.stderr.on('data', (data) => {
+            err += data.toString();
+            process_1.stderr.write(data.toString());
+        });
     });
     if (res.exitCode !== 0) {
-        console.error(res.stderr.toString());
-        console.error('Failed to extract');
+        console.error(err);
+        console.error('Error extracting', tarballPath, 'to', extractPath);
         process.exit(1);
     }
     console.log('Extracted', tarballPath, 'to', extractPath);
+    // get the top level folder from the tarball
+    const files = fs.readdirSync(extractPath);
+    if (files.length !== 1) {
+        console.error('Expected 1 top level folder in tarball');
+        process.exit(1);
+    }
+    const topFolder = files[0];
+    // copy this folder to versionPath
+    const topFolderExtractPath = path.join(extractPath, topFolder);
+    console.log('Copying', topFolderExtractPath, 'to', versionPath);
+    // recursively copy all files from topFolderExtractPath to versionPath
+    await fse.copy(topFolderExtractPath, versionPath, { recursive: true });
     // create link from $(zigDir)/versions/current to $(zigDir)/versions/$(version)
     const currentPath = path.join(zigDir, 'versions', 'current');
     if (fs.existsSync(currentPath)) {
         fs.unlinkSync(currentPath);
     }
-    fs.symlinkSync(extractPath, currentPath);
+    fs.symlinkSync(versionPath, currentPath);
 }
 main();
 //# sourceMappingURL=index.js.map
