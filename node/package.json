@@ -22,9 +22,6 @@
     "clean": "gts clean",
     "compile": "tsc",
     "fix": "gts fix",
-    "lint": "gts lint",
-    "posttest": "npm.cmd run lint",
-    "prepare": "npm.cmd run compile",
-    "pretest": "npm.cmd run compile"
+    "lint": "gts lint"
   }
 }
