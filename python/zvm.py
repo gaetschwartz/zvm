@@ -40,7 +40,8 @@ def get_zig_mainfest() -> Dict[str, Any]:
         sys.exit(1)
     data = json.loads(r.text)
     for key, value in data.items():
-        value["version"] = key
+        if "version" not in value:
+            value["version"] = key
     return data
 
 
@@ -224,7 +225,7 @@ def install(version: str, verbose: bool = False):
 
     # create a .zvm_version file in ~/.zvm/versions/<version>/ containing the true version
     with open(os.path.join(zvm_folder, "versions", version, ".zvm_version"), "w") as f:
-        f.write(true_version)
+        f.write(zig_data["version"])
 
     print(c.stylize(f"Successfully installed version {true_version}", c.fg("green")))
 
@@ -332,34 +333,66 @@ def list_versions():
             continue
         if not os.path.exists(os.path.join(full_v_path, ".zvm_version")):
             continue
+        true_version = None
+        with open(os.path.join(full_v_path, ".zvm_version")) as f:
+            true_version = f.read()
+        version_str = f"  {v}"
+        if v != true_version:
+            version_str += f" ({true_version})"
         if v == current_version:
-            print(c.stylize(f"  - {v} (current)", c.fg("green")))
+            print(c.stylize(f"  - {version_str} (current)", c.fg("green")))
         else:
-            print(f"  - {v}")
+            print(f"  - {version_str}")
 
 
-def use(version: str):
+def use(version: str, global_: bool = True):
     """
     Uses a version.
     """
-    zvm_folder = os.path.expanduser("~/.zvm")
-    # check if the version is installed
-    if not os.path.exists(os.path.join(zvm_folder, "versions", version)):
-        print(f"version {version} is not installed")
-        sys.exit(1)
+    if global_:
+        local_zvm_folder = os.path.expanduser("~/.zvm")
+        # check if the version is installed
+        if not os.path.exists(os.path.join(local_zvm_folder, "versions", version)):
+            print(f"version {version} is not installed")
+            sys.exit(1)
 
-    # get the current version
-    current_version = get_current_version()
+        # get the current version
+        current_version = get_current_version()
 
-    # delete the current symlink if it exists
-    if current_version is not None:
-        os.remove(os.path.join(zvm_folder, "versions", "current"))
-    # create a new symlink
-    os.symlink(
-        os.path.join(zvm_folder, "versions", version),
-        os.path.join(zvm_folder, "versions", "current"),
-    )
-    print("Now using version", c.stylize(version, c.fg("green"), c.attr("bold")))
+        # delete the current symlink if it exists
+        if current_version is not None:
+            os.remove(os.path.join(local_zvm_folder, "versions", "current"))
+        # create a new symlink
+        os.symlink(
+            os.path.join(local_zvm_folder, "versions", version),
+            os.path.join(local_zvm_folder, "versions", "current"),
+        )
+        print("Now using version", c.stylize(version, c.fg("green"), c.attr("bold")))
+    else:
+        # create a symlink to the selected version in `cwd`/.zvm/zig_sdk
+        cwd = os.getcwd()
+        local_zvm_folder = os.path.join(cwd, ".zvm")
+        zvm_folder = os.path.expanduser("~/.zvm")
+        # check if the version is installed
+        if not os.path.exists(os.path.join(zvm_folder, "versions", version)):
+            print(c.stylize(f"Version {version} is not installed", c.fg("yellow")))
+            sys.exit(1)
+
+        # check if the .zvm folder exists
+        if not os.path.exists(local_zvm_folder):
+            os.mkdir(local_zvm_folder)
+
+        # symlink `cwd`/.zvm/zig_sdk to ~/.zvm/versions/version
+        # check if the symlink already exists
+        zig_sdk_local_path = os.path.join(local_zvm_folder, "zig_sdk")
+        if os.path.exists(zig_sdk_local_path):
+            os.remove(zig_sdk_local_path)
+        os.symlink(
+            os.path.join(zvm_folder, "versions", version),
+            zig_sdk_local_path,
+            target_is_directory=True,
+        )
+        print("Now using version", c.stylize(version, c.fg("green"), c.attr("bold")))
 
 
 def spawn_zig(version: str, args: List[str]):
@@ -377,6 +410,43 @@ def spawn_zig(version: str, args: List[str]):
     zig_path = os.path.join(zvm_folder, "versions", version, "zig")
     # spawn the zig process
     os.execv(zig_path, [zig_path] + args)
+
+
+def list_online_versions():
+    """
+    Lists all online versions.
+    """
+    # get the manifest
+    manifest = get_zig_mainfest()
+    # get all key,value pairs from the manifest
+    all_entries = manifest.items()
+    # sort the entries by the date
+    sorted_entries = sorted(all_entries, key=lambda x: x[1]["date"])
+
+    print(c.stylize("Online versions:", c.attr("bold")))
+    # print the versions
+    for v in sorted_entries:
+        version = v[0]
+        date = v[1]["date"]
+        if version == "master":
+            print(f"  - {version} - {manifest[version]['version']} - {date}")
+        else:
+            print(f"  - {version} ({date})")
+
+
+def clear_cache():
+    """
+    Clears the cache.
+    """
+    zvm_folder = os.path.expanduser("~/.zvm")
+    cache_folder = os.path.join(zvm_folder, "cache")
+    # check if the cache folder exists
+    if not os.path.exists(cache_folder):
+        print(c.stylize("Cache already empty", c.fg("yellow")))
+        sys.exit(0)
+    # delete the cache folder
+    shutil.rmtree(cache_folder)
+    print(c.stylize("Successfully cleared cache", c.fg("green")))
 
 
 if __name__ == "__main__":
@@ -398,15 +468,23 @@ if __name__ == "__main__":
 
     # list command
     list_parser = subparsers.add_parser("list")
+    list_parser.add_argument("--online", action="store_true", help="list online versions")
 
     # use command
     use_parser = subparsers.add_parser("use")
     use_parser.add_argument("version", help="the version to use")
+    use_parser.add_argument(
+        "-g", "--global", action="store_true", help="use globally", dest="global_"
+    )
 
     # spawn command
     spawn_parser = subparsers.add_parser("spawn")
     spawn_parser.add_argument("version", help="the version to spawn")
     spawn_parser.add_argument("args", nargs=argparse.REMAINDER, help="the arguments to pass to zig")
+
+    # cache command
+    cache_parser = subparsers.add_parser("cache")
+    cache_parser.add_argument("action", help="the action to perform", choices=["clear"])
 
     # help command
     help_parser = subparsers.add_parser("help")
@@ -420,12 +498,18 @@ if __name__ == "__main__":
     elif args.command == "uninstall":
         uninstall(args.version)
     elif args.command == "list":
-        list_versions()
+        if args.online:
+            list_online_versions()
+        else:
+            list_versions()
     elif args.command == "use":
-        use(args.version)
+        use(args.version, global_=args.global_)
     elif args.command == "help":
         parser.print_help()
     elif args.command == "spawn":
         spawn_zig(args.version, args.args)
+    elif args.command == "cache":
+        if args.action == "clear":
+            clear_cache()
     else:
         raise ValueError("invalid command")

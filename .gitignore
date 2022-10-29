@@ -1,3 +1,4 @@
 node/node_modules/
 zig-out/
 zig-cache/
+.DS_Store
