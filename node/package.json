@@ -2,6 +2,7 @@
   "dependencies": {
     "@types/yargs": "^17.0.13",
     "axios": "0.27.2",
+    "chalk": "^5.1.2",
     "fs-extra": "^10.1.0",
     "yargs": "^17.6.0"
   },
@@ -14,7 +15,10 @@
   "engines": {
     "node": ">=16.0.0"
   },
+  "exports": "./src/index.js",
+  "module": "ESNext",
   "scripts": {
+    "build": "npm.cmd run clean && npm.cmd run compile && nexe -i \"build/src/index.js\" -b -t windows --verbose -o build/zvm.exe",
     "clean": "gts clean",
     "compile": "tsc",
     "fix": "gts fix",
