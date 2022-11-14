@@ -260,14 +260,15 @@ def update(version: str):
         new_version = last_entry[0]
         # check the new version is newer than the current version
         if new_version == current_version:
-            print("already up to date")
+            print(c.stylize("Already up to date", c.fg("green")))
             sys.exit(0)
         version_to_install = new_version
     elif version == "master":
         # check that the new version is newer than the current version
         new_version = manifest["master"]["version"]
+        version_to_install = new_version
         if new_version == current_version:
-            print("already up to date")
+            print(c.stylize("Already up to date", c.fg("green")))
             sys.exit(0)
 
         # delete the current version
