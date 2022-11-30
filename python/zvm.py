@@ -464,7 +464,7 @@ def clear_cache():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Zig version manager")
+    parser = argparse.ArgumentParser(description="Zig version manager", prog="zvm")
     subparsers = parser.add_subparsers(dest="command")
 
     # install command
