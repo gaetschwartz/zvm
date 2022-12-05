@@ -239,7 +239,7 @@ def install(version: str, verbose: bool = False):
     print(c.stylize(f"Successfully installed version {true_version}", c.fg("green")))
 
 
-def update(version: str):
+def upgrade(version: str):
     """
     Updates a version. This only works for "stable" and "master".
     """
@@ -283,6 +283,8 @@ def update(version: str):
         if new_version == current_version:
             print(c.stylize("Already up to date", c.fg("yellow")))
             sys.exit(0)
+        else:
+            print(c.stylize("Updating master to version " + new_version, c.fg("green")))
 
         # delete the current version
     shutil.rmtree(os.path.join(zvm_folder, "versions", version))
@@ -473,8 +475,8 @@ if __name__ == "__main__":
     install_parser.add_argument("--verbose", action="store_true")
 
     # update command
-    update_parser = subparsers.add_parser("update")
-    update_parser.add_argument("version", help="the version to update")
+    update_parser = subparsers.add_parser("upgrade")
+    update_parser.add_argument("version", help="the version to upgrade")
 
     # uninstall command
     uninstall_parser = subparsers.add_parser("uninstall")
@@ -507,8 +509,8 @@ if __name__ == "__main__":
 
     if args.command == "install":
         install(args.version, verbose=args.verbose)
-    elif args.command == "update":
-        update(args.version)
+    elif args.command == "upgrade":
+        upgrade(args.version)
     elif args.command == "uninstall":
         uninstall(args.version)
     elif args.command == "list":
