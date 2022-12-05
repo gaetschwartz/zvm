@@ -9,6 +9,7 @@ import shutil
 import sys
 import tarfile
 import time
+import zipfile
 from typing import Any, Dict, List, Literal, Optional
 
 import colored as c
@@ -81,6 +82,7 @@ def get_arch() -> str:
 
     translations = {
         "arm64": "aarch64",
+        "AMD64": "x86_64",
     }
 
     uname = platform.uname()
@@ -136,6 +138,7 @@ def install(version: str, verbose: bool = False):
     if machine_name not in zig_data:
         # use colored
         print(c.stylize(f"No zig version for {machine_name}", c.fg("red")))
+        sys.exit(1)
 
     # get the tarball url
     tarball = zig_data[machine_name]["tarball"]
@@ -202,8 +205,14 @@ def install(version: str, verbose: bool = False):
     # extract the tarball to ~/.zvm/cache/extracted/<uuid>/
     micros = int(round(time.time()))
     extract_path = os.path.join(zvm_folder, "cache", "extracted", str(micros))
-    with tarfile.open(tarball_path) as tar:
-        tar.extractall(extract_path)
+    # check the tarball extension
+
+    if tarball.endswith(".zip"):
+        with zipfile.ZipFile(tarball_path, "r") as zip_ref:
+            zip_ref.extractall(extract_path)
+    else:
+        with tarfile.open(tarball_path) as tar_ref:
+            tar_ref.extractall(extract_path)
     # make sure there is only one folder in the extracted folder
     extracted_folders = os.listdir(extract_path)
     if len(extracted_folders) != 1:
@@ -244,7 +253,11 @@ def update(version: str):
     zvm_folder = os.path.expanduser("~/.zvm")
     # get the current version
     current_version: str
-    with open(os.path.join(zvm_folder, "versions", version, ".zvm_version")) as f:
+    zvm_version_file = os.path.join(zvm_folder, "versions", version, ".zvm_version")
+    if not os.path.exists(zvm_version_file):
+        print(c.stylize(f"Version {version} is not installed", c.fg("red")))
+        sys.exit(1)
+    with open(zvm_version_file) as f:
         current_version = f.read()
 
     version_to_install: Optional[str] = None
@@ -266,13 +279,13 @@ def update(version: str):
     elif version == "master":
         # check that the new version is newer than the current version
         new_version = manifest["master"]["version"]
-        version_to_install = new_version
+        version_to_install = "master"
         if new_version == current_version:
-            print(c.stylize("Already up to date", c.fg("green")))
+            print(c.stylize("Already up to date", c.fg("yellow")))
             sys.exit(0)
 
         # delete the current version
-        shutil.rmtree(os.path.join(zvm_folder, "versions", version))
+    shutil.rmtree(os.path.join(zvm_folder, "versions", version))
 
     # install the new version
     install(version_to_install)
@@ -315,7 +328,7 @@ def list_versions():
     zvm_folder = os.path.expanduser("~/.zvm")
     # check if the versions folder exists
     if not os.path.exists(os.path.join(zvm_folder, "versions")):
-        print("no versions installed")
+        print(c.stylize("No versions installed", c.fg("yellow")))
         sys.exit(0)
 
     # get all versions
@@ -451,7 +464,7 @@ def clear_cache():
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Zig version manager")
+    parser = argparse.ArgumentParser(description="Zig version manager", prog="zvm")
     subparsers = parser.add_subparsers(dest="command")
 
     # install command
@@ -513,4 +526,4 @@ if __name__ == "__main__":
         if args.action == "clear":
             clear_cache()
     else:
-        raise ValueError("invalid command")
+        parser.print_help()
