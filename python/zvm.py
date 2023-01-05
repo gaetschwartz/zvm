@@ -121,9 +121,15 @@ def install(version: str, verbose: bool = False):
         all_entries = manifest.items()
         # sort the entries by the date
         sorted_entries = sorted(all_entries, key=lambda x: x[1]["date"])
-
-        # get the last entry
-        last_entry = sorted_entries[-1]
+        # get the last entry that is not master
+        last_entry = None
+        for entry in sorted_entries[::-1]:
+            if entry[0] != "master":
+                last_entry = entry
+                break
+        if last_entry is None:
+            print(c.stylize("No stable version found", c.fg("red")))
+            sys.exit(1)
         # get the version from the last entry
         true_version = last_entry[0]
 
@@ -224,7 +230,7 @@ def install(version: str, verbose: bool = False):
         sys.exit(1)
     # move the extracted folder to ~/.zvm/versions/<version>/
     extracted_folder = os.path.join(extract_path, extracted_folders[0])
-    version_path = os.path.join(zvm_folder, "versions", true_version)
+    version_path = os.path.join(zvm_folder, "versions", version)
     # make sure ~/.zvm/versions exists
     if not os.path.exists(os.path.join(zvm_folder, "versions")):
         os.makedirs(os.path.join(zvm_folder, "versions"))
@@ -266,9 +272,8 @@ def upgrade(version: str):
         all_entries = manifest.items()
         # sort the entries by the date
         sorted_entries = sorted(all_entries, key=lambda x: x[1]["date"])
-
-        # get the last entry
-        last_entry = sorted_entries[-1]
+        # get the last entry that is not master
+        last_entry = [x for x in sorted_entries if x[0] != "master"][-1]
         # get the version from the last entry
         new_version = last_entry[0]
         # check the new version is newer than the current version
@@ -465,6 +470,41 @@ def clear_cache():
     print(c.stylize("Successfully cleared cache", c.fg("green")))
 
 
+def get_size(start_path="."):
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(start_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # skip if it is a symlink
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+    return total_size
+
+
+def cache_size():
+    """
+    Returns the size of the cache.
+    """
+    zvm_folder = os.path.expanduser("~/.zvm")
+    cache_folder = os.path.join(zvm_folder, "cache")
+    # check if the cache folder exists
+    if not os.path.exists(cache_folder):
+        print(c.stylize("Cache is empty", c.fg("yellow")))
+        sys.exit(0)
+    # get the size of the cache folder
+    size = get_size(cache_folder)
+    # convert to human readable format
+    def sizeof_fmt(num, suffix="B"):
+        for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei", "Zi"]:
+            if abs(num) < 1024.0:
+                return "%3.1f %s%s" % (num, unit, suffix)
+            num /= 1024.0
+        return "%.1f%s%s" % (num, "Yi", suffix)
+
+    size_str = sizeof_fmt(size)
+    print(c.stylize(f"Cache size: {size_str}", c.fg("green")))
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Zig version manager", prog="zvm")
     subparsers = parser.add_subparsers(dest="command")
@@ -500,7 +540,7 @@ if __name__ == "__main__":
 
     # cache command
     cache_parser = subparsers.add_parser("cache")
-    cache_parser.add_argument("action", help="the action to perform", choices=["clear"])
+    cache_parser.add_argument("action", help="the action to perform", choices=["clear", "size"])
 
     # help command
     help_parser = subparsers.add_parser("help")
@@ -527,5 +567,7 @@ if __name__ == "__main__":
     elif args.command == "cache":
         if args.action == "clear":
             clear_cache()
+        elif args.action == "size":
+            cache_size()
     else:
         parser.print_help()
