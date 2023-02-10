@@ -32,18 +32,24 @@ jobs:
           submodules: true
       - uses: goto-bus-stop/setup-zig@v2
       - run: zig build -Doptimize=ReleaseSafe -Dtarget=${{matrix.target}}
+      - name: Rename binary
+        if: ${{ !endsWith(matrix.target, '-windows') }}
+        run: mv zig-out/bin/zvm zig-out/bin/zvm-${{matrix.target}}
+      - name: Rename binary (windows)
+        if: ${{ endsWith(matrix.target, '-windows') }}
+        run: ren zig-out\bin\zvm.exe zvm-${{matrix.target}}.exe
       - uses: actions/upload-artifact@v3
         name: Upload artifacts
         if: ${{ !endsWith(matrix.target, '-windows') }}
         with:
           name: zvm-${{matrix.target}}
-          path: zig-out/bin/zvm
+          path: zig-out/bin/zvm-${{matrix.target}}
       - uses: actions/upload-artifact@v3
         name: Upload artifacts (windows)
         if: ${{ endsWith(matrix.target, '-windows') }}
         with:
           name: zvm-${{matrix.target}}.exe
-          path: zig-out/bin/zvm.exe
+          path: zig-out/bin/zvm-${{matrix.target}}.exe
 
   deploy:
     runs-on: ubuntu-latest
@@ -54,27 +60,6 @@ jobs:
           submodules: true
       - uses: actions/download-artifact@v3
         with:
-          name: zvm-x86_64-linux
-          path: artifacts/
-      - uses: actions/download-artifact@v3
-        with:
-          name: zvm-x86_64-macos
-          path: artifacts/
-      - uses: actions/download-artifact@v3
-        with:
-          name: zvm-aarch64-linux
-          path: artifacts/
-      - uses: actions/download-artifact@v3
-        with:
-          name: zvm-aarch64-macos
-          path: artifacts/
-      - uses: actions/download-artifact@v3
-        with:
-          name: zvm-x86_64-windows.exe
-          path: artifacts/
-      - uses: actions/download-artifact@v3
-        with:
-          name: zvm-aarch64-windows.exe
           path: artifacts/
       - run: |
           git config --local user.name 'ZVM Bot'
