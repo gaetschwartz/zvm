@@ -79,6 +79,7 @@ jobs:
       - run: |
           git config --local user.name 'ZVM Bot'
           git config --local user.email 'blaxoujunior@gmail.com'
+          ls artifacts/
           chmod +x artifacts/zvm-x86_64-linux
           version=$(artifacts/zvm-x86_64-linux --version --raw)
           # set outputs

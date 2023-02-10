@@ -3,11 +3,7 @@
   "files.autoSaveDelay": 300,
   "yaml.schemas": {
     "https://json.schemastore.org/github-workflow": [
-      "/.github/workflows/**/*.yml"
+      ".github/workflows/**/*.yml",
     ],
-    "https://json.schemastore.org/dart-build": [
-      "build.yaml"
-    ],
-    "https://json.schemastore.org/github-workflow.json": "file:///Users/gaetan/dev/bin/zvm/.github/workflows/build.yaml"
   },
 }
