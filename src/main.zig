@@ -41,6 +41,11 @@ pub fn main() !void {
                 .long_name = "verbose",
                 .description = "show verbose output",
             },
+            .{
+                .name = null,
+                .long_name = "raw",
+                .description = "show raw version",
+            },
         },
     });
 
@@ -260,16 +265,22 @@ pub fn main() !void {
 pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     const version = ctx.hasFlag("version");
     const verbose = ctx.hasFlag("verbose");
+    const raw = ctx.hasFlag("raw");
+
     if (version) {
         const stdout = std.io.getStdOut().writer();
+        if (raw) {
+            try stdout.print("{s}\n", .{build_options.version});
+            return;
+        }
         const start = comptime "  " ++ ansi.fade("•") ++ ansi.BLUE ++ ansi.BOLD;
         const end = comptime ansi.RESET ++ "\n";
-        try stdout.print(start ++ " zvm          " ++ ansi.RESET_BOLD ++ (build_options.version orelse "unknown") ++ end, .{});
+        try stdout.print(start ++ " zvm          " ++ ansi.RESET_BOLD ++ (build_options.version) ++ end, .{});
         try stdout.print(start ++ " commit_hash  " ++ ansi.RESET_BOLD ++ (build_options.git_commit orelse "unknown") ++ end, .{});
         try stdout.print(start ++ " build_date   " ++ ansi.RESET_BOLD ++ (build_options.build_date orelse "unknown") ++ end, .{});
         try stdout.print(start ++ " zig          " ++ ansi.RESET_BOLD ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end, .{});
         if (verbose) {
-            try stdout.print(start ++ " is_ci        " ++ ansi.RESET_BOLD ++ (build_options.is_ci orelse "unknown") ++ end, .{});
+            try stdout.print(start ++ " is_ci        " ++ ansi.RESET_BOLD ++ (build_options.is_ci) ++ end, .{});
         }
         return;
     }

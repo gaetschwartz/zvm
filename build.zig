@@ -35,11 +35,11 @@ pub fn build(b: *std.Build) void {
     };
 
     defer allocator.free(versionStr);
-    options.addOption(?[]const u8, "version", versionStr);
+    options.addOption([]const u8, "version", versionStr);
 
     const isCi = std.process.getEnvVarOwned(allocator, "CI") catch "false";
     // defer allocator.free(isCi);
-    options.addOption(?[]const u8, "is_ci", isCi);
+    options.addOption([]const u8, "is_ci", isCi);
     options.addOption(?[DATE_SIZE]u8, "build_date", date(allocator) orelse null);
 
     const knownFolders = b.createModule(.{
