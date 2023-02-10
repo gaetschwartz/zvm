@@ -61,14 +61,13 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: true
-          fetch-depth: 0
       - uses: actions/download-artifact@v3
         with:
           path: artifacts/
       - run: |
+          set -ex
           git config --local user.name 'ZVM Bot'
           git config --local user.email 'blaxoujunior@gmail.com'
-          ls -R artifacts/
           chmod +x artifacts/zvm-x86_64-linux/zvm-x86_64-linux
           version=$(artifacts/zvm-x86_64-linux/zvm-x86_64-linux --version --raw)
           # set outputs
