@@ -13,7 +13,7 @@ jobs:
       - name: Set up Homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
-      - run: brew tab gaetschwartz/zvm
+      - run: brew tap gaetschwartz/zvm
       - uses: Homebrew/actions/bump-formulae@master
         with:
           formulae: zvm
