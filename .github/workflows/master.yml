@@ -3,7 +3,7 @@ on:
     branches:
       - master
 
-name: Build and deploy master
+name: Build on master
 
 jobs:
   test:

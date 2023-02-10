@@ -3,7 +3,7 @@ on:
     branches:
       - staging
 
-name: Build and deploy staging
+name: Build and deploy on staging
 
 jobs:
   build-staging:
