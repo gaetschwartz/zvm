@@ -37,7 +37,7 @@ jobs:
         run: mv zig-out/bin/zvm zig-out/bin/zvm-${{matrix.target}}
       - name: Rename binary (windows)
         if: ${{ endsWith(matrix.target, '-windows') }}
-        run: ren zig-out\bin\zvm.exe zvm-${{matrix.target}}.exe
+        run: mv zig-out/bin/zvm.exe zig-out/bin/zvm-${{matrix.target}}.exe
       - uses: actions/upload-artifact@v3
         name: Upload artifacts
         if: ${{ !endsWith(matrix.target, '-windows') }}
