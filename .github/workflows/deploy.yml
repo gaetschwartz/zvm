@@ -4,7 +4,7 @@ on:
       - staging
 
 jobs:
-  build-stable:
+  build-staging:
     strategy:
       matrix:
         target:
@@ -40,9 +40,9 @@ jobs:
           name: zvm-${{matrix.target}}
           path: zig-out/bin/zvm-${{matrix.target}}.exe
 
-  deploy-stable:
+  deploy-staging:
     runs-on: ubuntu-latest
-    needs: [build]
+    needs: [build-staging]
     steps:
       - uses: actions/checkout@v3
         with:
