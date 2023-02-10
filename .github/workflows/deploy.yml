@@ -1,0 +1,74 @@
+on:
+  push:
+    branches:
+      - staging
+
+jobs:
+  build-stable:
+    strategy:
+      matrix:
+        target:
+          - x86_64-linux
+          - x86_64-macos
+          - aarch64-linux
+          - aarch64-macos
+          - x86_64-windows
+          - aarch64-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: goto-bus-stop/setup-zig@v2
+      - run: zig build -Doptimize=ReleaseSafe -Dtarget=${{matrix.target}}
+      - name: Rename binary
+        if: ${{ !endsWith(matrix.target, '-windows') }}
+        run: mv zig-out/bin/zvm zig-out/bin/zvm-${{matrix.target}}
+      - name: Rename binary (windows)
+        if: ${{ endsWith(matrix.target, '-windows') }}
+        run: mv zig-out/bin/zvm.exe zig-out/bin/zvm-${{matrix.target}}.exe
+      - uses: actions/upload-artifact@v3
+        name: Upload artifacts
+        if: ${{ !endsWith(matrix.target, '-windows') }}
+        with:
+          name: zvm-${{matrix.target}}
+          path: zig-out/bin/zvm-${{matrix.target}}
+      - uses: actions/upload-artifact@v3
+        name: Upload artifacts (windows)
+        if: ${{ endsWith(matrix.target, '-windows') }}
+        with:
+          name: zvm-${{matrix.target}}
+          path: zig-out/bin/zvm-${{matrix.target}}.exe
+
+  deploy-stable:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+      - run: |
+          git config --local user.name 'ZVM Bot'
+          git config --local user.email 'blaxoujunior@gmail.com'
+          ls -R artifacts/
+          chmod +x artifacts/zvm-x86_64-linux/zvm-x86_64-linux
+          version=$(artifacts/zvm-x86_64-linux/zvm-x86_64-linux --version --raw)
+          # set outputs
+          echo "version=$version" >> $GITHUB_OUTPUT
+        id: git-version
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.git-version.outputs.version }}
+          files: |
+            artifacts/zvm-x86_64-macos/zvm-x86_64-macos
+            artifacts/zvm-aarch64-macos/zvm-aarch64-macos
+            artifacts/zvm-x86_64-linux/zvm-x86_64-linux
+            artifacts/zvm-aarch64-linux/zvm-aarch64-linux
+            artifacts/zvm-x86_64-windows/zvm-x86_64-windows.exe
+            artifacts/zvm-aarch64-windows/zvm-aarch64-windows.exe
+          body: |
+            Release ${{ steps.git-version.outputs.version }}
