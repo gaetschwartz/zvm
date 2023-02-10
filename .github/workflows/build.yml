@@ -34,10 +34,12 @@ jobs:
       - run: zig build -Doptimize=ReleaseSafe -Dtarget=${{matrix.target}}
       - name: Rename binary
         if: ${{ !endsWith(matrix.target, '-windows') }}
-        run: mv zig-out/bin/zvm zig-out/bin/zvm-${{matrix.target}}
+        run: mv zvm zvm-${{matrix.target}}
+        working-directory: zig-out/bin/
       - name: Rename binary (windows)
         if: ${{ endsWith(matrix.target, '-windows') }}
-        run: mv zig-out/bin/zvm.exe zig-out/bin/zvm-${{matrix.target}}.exe
+        run: mv zvm.exe zvm-${{matrix.target}}.exe
+        working-directory: zig-out/bin/
       - uses: actions/upload-artifact@v3
         name: Upload artifacts
         if: ${{ !endsWith(matrix.target, '-windows') }}
@@ -48,7 +50,7 @@ jobs:
         name: Upload artifacts (windows)
         if: ${{ endsWith(matrix.target, '-windows') }}
         with:
-          name: zvm-${{matrix.target}}
+          name: zvm-${{matrix.target}}.exe
           path: zig-out/bin/zvm-${{matrix.target}}.exe
 
   deploy:
@@ -65,8 +67,8 @@ jobs:
           git config --local user.name 'ZVM Bot'
           git config --local user.email 'blaxoujunior@gmail.com'
           ls -R artifacts/
-          chmod +x artifacts/zvm-x86_64-linux/zvm-x86_64-linux
-          version=$(artifacts/zvm-x86_64-linux/zvm-x86_64-linux --version --raw)
+          chmod +x artifacts/zvm-x86_64-linux
+          version=$(artifacts/zvm-x86_64-linux --version --raw)
           # set outputs
           echo "version=$version" >> $GITHUB_OUTPUT
         id: git-version
@@ -75,12 +77,12 @@ jobs:
         with:
           tag_name: ${{ steps.git-version.outputs.version }}
           files: |
-            artifacts/zvm-x86_64-macos/zvm-x86_64-macos
-            artifacts/zvm-aarch64-macos/zvm-aarch64-macos
-            artifacts/zvm-x86_64-linux/zvm-x86_64-linux
-            artifacts/zvm-aarch64-linux/zvm-aarch64-linux
-            artifacts/zvm-x86_64-windows/zvm-x86_64-windows.exe
-            artifacts/zvm-aarch64-windows/zvm-aarch64-windows.exe
+            artifacts/zvm-x86_64-macos
+            artifacts/zvm-aarch64-macos
+            artifacts/zvm-x86_64-linux
+            artifacts/zvm-aarch64-linux
+            artifacts/zvm-x86_64-windows.exe
+            artifacts/zvm-aarch64-windows.exe
           body: |
             Release ${{ steps.git-version.outputs.version }}
           prerelease: true
