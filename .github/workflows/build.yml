@@ -1,0 +1,95 @@
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{matrix.os}}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: goto-bus-stop/setup-zig@v2
+      - run: zig build test
+  build:
+    strategy:
+      matrix:
+        target:
+          - x86_64-linux
+          - x86_64-macos
+          - aarch64-linux
+          - aarch64-macos
+          - x86_64-windows
+          - aarch64-windows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: goto-bus-stop/setup-zig@v2
+      - run: zig build -Doptimize=ReleaseSafe -Dtarget=${{matrix.target}}
+      - uses: actions/upload-artifact@v3
+        name: Upload artifacts
+        if: ${{ !endsWith(matrix.target, '-windows') }}
+        with:
+          name: zvm-${{matrix.target}}
+          path: zig-out/bin/zvm
+      - uses: actions/upload-artifact@v3
+        name: Upload artifacts (windows)
+        if: ${{ endsWith(matrix.target, '-windows') }}
+        with:
+          name: zvm-${{matrix.target}}.exe
+          path: zig-out/bin/zvm.exe
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test, build]
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - uses: actions/download-artifact@v3
+        with:
+          name: zvm-x86_64-linux
+          path: artifacts/
+      - uses: actions/download-artifact@v3
+        with:
+          name: zvm-x86_64-macos
+          path: artifacts/
+      - uses: actions/download-artifact@v3
+        with:
+          name: zvm-aarch64-linux
+          path: artifacts/
+      - uses: actions/download-artifact@v3
+        with:
+          name: zvm-aarch64-macos
+          path: artifacts/
+      - uses: actions/download-artifact@v3
+        with:
+          name: zvm-x86_64-windows.exe
+          path: artifacts/
+      - uses: actions/download-artifact@v3
+        with:
+          name: zvm-aarch64-windows.exe
+          path: artifacts/
+      - run: |
+          git config --local user.name 'ZVM Bot'
+          git config --local user.email 'blaxoujunior@gmail.com'
+          git tag -a ${{ github.ref }} -m "Release ${{ github.ref }}"
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/zvm-x86_64-linux
+            artifacts/zvm-x86_64-macos
+            artifacts/zvm-aarch64-linux
+            artifacts/zvm-aarch64-macos
+            artifacts/zvm-x86_64-windows.exe
+            artifacts/zvm-aarch64-windows.exe
+          body: |
+            Release ${{ github.ref }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
