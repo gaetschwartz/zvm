@@ -113,7 +113,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     const cache_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache_web, filename });
     std.log.debug("cache path: {s}", .{cache_path});
 
-    try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") + "...", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
+    try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "...", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
 
     try fetchArchiveChildProcess(.{
         .url = archive.tarball,
