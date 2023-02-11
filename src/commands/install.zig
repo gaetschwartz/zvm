@@ -113,7 +113,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     const cache_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache_web, filename });
     std.log.debug("cache path: {s}", .{cache_path});
 
-    try stdout.print(ansi.style("Downloading {s} at {s}...\n", .blue), .{ target, archive.tarball });
+    try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") + "...", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
 
     try fetchArchiveChildProcess(.{
         .url = archive.tarball,
@@ -168,7 +168,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     try std.json.stringify(version_info, .{}, writer);
     std.log.debug("wrote version file to {s}", .{version_file_path});
 
-    try stdout.print(ansi.style("Successfully installed {s}.\n", .green), .{target});
+    try stdout.print(ansi.style("Successfully installed " ++ ansi.bold("{s}") ++ ".\n", .green), .{target});
 }
 
 fn getLatestReleaseForChannel(index: Index, channel: []const u8) ?Release {
