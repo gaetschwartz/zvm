@@ -9,7 +9,7 @@ pub fn zvmDir(allocator: std.mem.Allocator) ![]const u8 {
         return error.CouldNotFindHomeDirectory;
     };
     std.log.debug("home: {s}", .{home});
-    return try std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm-zig" });
+    return try std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm" });
 }
 
 const ArchiveType = enum {
