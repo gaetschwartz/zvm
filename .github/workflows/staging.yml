@@ -73,7 +73,7 @@ jobs:
           # create a list of files to upload
           files=$(find . -type f -name "zvm-*")
           # join with newlines and sort
-          files=$(echo $files | tr ' ' '\n' | sort | tr '\n' ' ')
+          files=$(echo $files | tr ' ' '\n' | sort | tr '\\n' ' ')
           # set outputs
           echo "files=$files" >> $GITHUB_OUTPUT
       - name: Release
