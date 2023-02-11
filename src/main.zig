@@ -273,11 +273,13 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
             try stdout.print("{s}\n", .{build_options.version});
             return;
         }
-        const start = comptime "  " ++ ansi.fade("•") ++ ansi.BLUE ++ ansi.BOLD;
+        const start = comptime "  " ++ ansi.fade("-") ++ ansi.BLUE ++ ansi.BOLD;
         const end = comptime ansi.RESET ++ "\n";
-        try stdout.print(start ++ " zvm          " ++ ansi.RESET_BOLD ++ (build_options.version) ++ end, .{});
+        try stdout.print(start ++ " version          " ++ ansi.RESET_BOLD ++ (build_options.version) ++ end, .{});
         try stdout.print(start ++ " commit_hash  " ++ ansi.RESET_BOLD ++ (build_options.git_commit orelse "unknown") ++ end, .{});
         try stdout.print(start ++ " build_date   " ++ ansi.RESET_BOLD ++ (build_options.build_date orelse "unknown") ++ end, .{});
+        // branch
+        try stdout.print(start ++ " branch       " ++ ansi.RESET_BOLD ++ (build_options.git_branch orelse "unknown") ++ end, .{});
         try stdout.print(start ++ " zig          " ++ ansi.RESET_BOLD ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end, .{});
         if (verbose) {
             try stdout.print(start ++ " is_ci        " ++ ansi.RESET_BOLD ++ (build_options.is_ci) ++ end, .{});

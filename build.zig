@@ -1,4 +1,5 @@
 const std = @import("std");
+const build_info = @import("build_info.zig");
 
 pub fn build(b: *std.Build) void {
     // Standard target options allows the person running `zig build` to choose
@@ -22,20 +23,17 @@ pub fn build(b: *std.Build) void {
     } else {
         options.addOption(?[]const u8, "git_commit", null);
     }
-    const build_info = getBuildInfo(allocator);
     const commit_count = commitCount(allocator) orelse 0;
+    options.addOption(u8, "commit_count", commit_count);
+
     const branch = gitBranch(allocator);
+    options.addOption(?[]const u8, "git_branch", branch);
     defer {
         if (branch) |br|
             allocator.free(br);
     }
-    const versionStr = std.fmt.allocPrint(allocator, "{s}-{s}.{d}", .{ build_info.version, branch orelse "null", commit_count }) catch |err| {
-        std.debug.print("error: {}\n", .{err});
-        std.os.exit(1);
-    };
 
-    defer allocator.free(versionStr);
-    options.addOption([]const u8, "version", versionStr);
+    options.addOption([]const u8, "version", build_info.version);
 
     const isCi = std.process.getEnvVarOwned(allocator, "CI") catch "false";
     // defer allocator.free(isCi);
@@ -146,37 +144,6 @@ fn date(allocator: std.mem.Allocator) ?[DATE_SIZE]u8 {
     var output: [DATE_SIZE]u8 = undefined;
     std.mem.copy(u8, &output, exec_result.stdout[0..DATE_SIZE]);
     return output;
-}
-
-// parse ./build.json and return a BuildInfo struct
-fn getBuildInfo(allocator: std.mem.Allocator) BuildInfo {
-    const build_json = std.fs.cwd().openFile("build.json", .{}) catch |err| {
-        std.debug.print("error: {}\n", .{err});
-        std.os.exit(1);
-    };
-    defer build_json.close();
-    const build_json_size = build_json.getEndPos() catch |err| {
-        std.debug.print("error: {}\n", .{err});
-        std.os.exit(1);
-    };
-    var buffer = allocator.alloc(u8, build_json_size) catch |err| {
-        std.debug.print("error: {}\n", .{err});
-        std.os.exit(1);
-    };
-
-    _ = build_json.readAll(buffer) catch |err| {
-        std.debug.print("error: {}\n", .{err});
-        std.os.exit(1);
-    };
-
-    defer allocator.free(buffer);
-
-    var stream = std.json.TokenStream.init(buffer);
-    const build_info = std.json.parse(BuildInfo, &stream, .{ .allocator = allocator }) catch |err| {
-        std.debug.print("error: {}\n", .{err});
-        std.os.exit(1);
-    };
-    return build_info;
 }
 
 pub const BuildInfo = struct {
