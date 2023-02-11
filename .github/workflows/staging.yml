@@ -70,16 +70,10 @@ jobs:
           for file in $(find . -type f -name "zvm-*"); do
             sha256sum $file > $file.sha256
           done
-          # create a list of files to upload
-          files=$(find . -type f -name "zvm-*")
-          # join with newlines and sort
-          files=$(echo $files | tr ' ' '\n' | sort | tr '\\n' ' ')
-          # set outputs
-          echo "files=$files" >> $GITHUB_OUTPUT
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.git-version.outputs.version }}
-          files: ${{ steps.hashes.outputs.files }}
+          files: artifacts/*/*
           body: |
             Release ${{ steps.git-version.outputs.version }}
