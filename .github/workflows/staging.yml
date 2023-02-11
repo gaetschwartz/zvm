@@ -62,16 +62,24 @@ jobs:
           # set outputs
           echo "version=$version" >> $GITHUB_OUTPUT
         id: git-version
+      - name: compute hashes
+        id: hashes
+        working-directory: artifacts
+        run: |
+          set -ex
+          for file in $(find . -type f -name "zvm-*"); do
+            sha256sum $file > $file.sha256
+          done
+          # create a list of files to upload
+          files=$(find . -type f -name "zvm-*")
+          # join with newlines
+          files=$(echo $files | tr ' ' '\n')
+          # set outputs
+          echo "files=$files" >> $GITHUB_OUTPUT
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.git-version.outputs.version }}
-          files: |
-            artifacts/zvm-x86_64-macos/zvm-x86_64-macos
-            artifacts/zvm-aarch64-macos/zvm-aarch64-macos
-            artifacts/zvm-x86_64-linux/zvm-x86_64-linux
-            artifacts/zvm-aarch64-linux/zvm-aarch64-linux
-            artifacts/zvm-x86_64-windows/zvm-x86_64-windows.exe
-            artifacts/zvm-aarch64-windows/zvm-aarch64-windows.exe
+          files: ${{ steps.hashes.outputs.files }}
           body: |
             Release ${{ steps.git-version.outputs.version }}
