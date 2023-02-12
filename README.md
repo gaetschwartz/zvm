@@ -12,7 +12,7 @@ brew install zvm
 
 #### Scoop
 ```powershell
-scoop bucket add zvm https://github.com/gaetschwartz/scoop-bucket.git
+scoop bucket add zvm https://github.com/gaetschwartz/scoop-zvm
 scoop install zvm
 ```
 
