@@ -41,7 +41,7 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
             else => return err,
         };
         // create the new symlink
-        try std.fs.symLinkAbsolute(target_version, global_version_path, .{});
+        try std.fs.symLinkAbsolute(target_version, global_version_path, .{ .is_directory = true });
         // check the current path and check if the current version is in the path
         const path: ?[]const u8 = std.process.getEnvVarOwned(allocator, "PATH") catch |err| switch (err) {
             error.EnvironmentVariableNotFound => null,
@@ -72,7 +72,7 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
             std.log.debug("PATH environment variable not found.", .{});
         }
 
-        try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " globally ✓\n", .green), .{target});
+        try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " globally.\n", .green), .{target});
     } else {
         const cwd = std.fs.cwd();
         // check if the cwd is a zvm project
@@ -98,6 +98,6 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
         };
         // create the new symlink
         try cwd.symLink(target_version, ".zvm", .{});
-        try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " in this directory ✓\n", .green), .{target});
+        try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " in this directory.\n", .green), .{target});
     }
 }
