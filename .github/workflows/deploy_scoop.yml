@@ -13,7 +13,7 @@ jobs:
       - name: Clone scoop
         run: git clone https://github.com/ScoopInstaller/Scoop scoop
       - name: Clone scoop-zvm
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: gaetschwartz/scoop-zvm
           path: scoop-zvm
