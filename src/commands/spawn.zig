@@ -21,10 +21,12 @@ pub fn spawn_cmd(ctx: RunContext) !void {
     const target = ctx.getPositional("target").?;
 
     const zvm = try zvmDir(allocator);
-    const zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target, "zig" });
+    const executableName = if (builtin.os.tag == .windows) "zig.exe" else "zig";
+    const zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target, executableName });
     // try to access the zig binary to make sure it exists
     std.fs.accessAbsolute(zig_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
+            std.debug.print("path {s} not found", .{zig_path});
             try stderr.print(ansi.style("Zig version " ++ ansi.bold("{s}") ++ " not found.\n", .red), .{
                 target,
             });
