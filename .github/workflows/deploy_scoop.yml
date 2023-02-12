@@ -10,19 +10,19 @@ jobs:
     name: Deploy Scoop
     runs-on: windows-latest
     steps:
-      - name: clone scoop
+      - name: Clone scoop
         uses: actions/checkout@v2
         with:
           repository: ScoopInstaller/Scoop
           path: scoop
-      - name: clone scoop-zvm
+      - name: Clone scoop-zvm
         uses: actions/checkout@v2
         with:
           repository: gaetschwartz/scoop-zvm
           path: scoop-zvm
-      - name: update scoop-zvm
+      - name: Update zvm.json
         run: scoop/bin/checkver.ps1 -Update -ForceUpdate scoop-zvm/zvm.json
-      - name: commit scoop-zvm
+      - name: Commit the changes to zvm.json
         working-directory: scoop-zvm
         run: |
           git config --global user.name "CLI bot"
@@ -30,7 +30,7 @@ jobs:
           git add zvm.json
           $tag_name = (Get-Content .\zvm.json -Raw | ConvertFrom-Json).version
           git commit -m "Update zvm to $tag_name"
-      - name: push scoop-zvm
+      - name: Push the changes
         working-directory: scoop-zvm
         run: |
           git push
