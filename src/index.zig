@@ -38,26 +38,18 @@ pub fn fetchIndex(allocator: std.mem.Allocator) anyerror!Index {
     var uri = try std.Uri.parse("https://ziglang.org/download/index.json");
     var req = try client.request(uri, .{}, .{});
 
-    var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
 
-    var total_read: usize = 0;
-    const BUFFER_SIZE = 4096;
-    var temp_buffer: [BUFFER_SIZE]u8 = undefined;
-    while (true) {
-        //std.log.debug("reading from request with state {any}\n", .{req.response.state});
-        const read = try req.readAll(&temp_buffer);
-        total_read += read;
-        std.log.debug("read: {d} bytes, total read: {d} ({d}B)\n", .{ read, total_read, total_read / 1024 });
-        if (read == 0) break;
-        try buffer.appendSlice(temp_buffer[0..read]);
-    }
+    // 500 kb
+    const BUFFER_SIZE = 500 * 1024;
+    var buffer: [BUFFER_SIZE]u8 = undefined;
+    const total_read = try req.readAll(&buffer);
+        
     std.log.debug("total read: {d}\n", .{total_read});
 
     // var token_stream = std.json.TokenStream.init(array.items[0..total_read]);
     var parser = std.json.Parser.init(allocator, true);
     defer parser.deinit();
-    var tree = try parser.parse(buffer.items[0..total_read]);
+    var tree = try parser.parse(buffer[0..total_read]);
     // ! we dont want to deinit the tree because it would free all the strings
 
     // std.log.debug("index:", .{});
