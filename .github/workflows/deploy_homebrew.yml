@@ -14,6 +14,7 @@ jobs:
         uses: actions/checkout@v2
         with:
           repository: gaetschwartz/zvm
+          fetch-depth: 0
       - name: Set up Homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
@@ -28,7 +29,7 @@ jobs:
       - name: Extract version
         id: extract-version
         run: |
-          tag_name=$(git describe --tags --abbrev=0)
+          tag_name=$(echo ${{ github.ref }} | cut -d / -f 3)
           echo "tag-name=$tag_name" >> $GITHUB_ENV
       - name: Bump Homebrew formula
         uses: mislav/bump-homebrew-formula-action@v2
