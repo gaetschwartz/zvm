@@ -1,0 +1,35 @@
+name: Scoop Deploy
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, released]
+
+jobs:
+  deploy:
+    name: Deploy Scoop
+    runs-on: windows-latest
+    steps:
+      - name: clone scoop
+        uses: actions/checkout@v2
+        with:
+          repository: ScoopInstaller/Scoop
+          path: scoop
+      - name: clone scoop-zvm
+        uses: actions/checkout@v2
+        with:
+          repository: gaetschwartz/scoop-zvm
+          path: scoop-zvm
+      - name: update scoop-zvm
+        run: scoop/bin/checkver.ps1 -Update -ForceUpdate scoop-zvm/zvm.json
+      - name: commit scoop-zvm
+        working-directory: scoop-zvm
+        run: |
+          git config --global user.name "CLI bot"
+          git config --global user.email "blaxoujunior@gmail.com"
+          git add zvm.json
+          git commit -m "Update zvm to ${{ github.event.release.tag_name }}"
+      - name: push scoop-zvm
+        working-directory: scoop-zvm
+        run: |
+          git push

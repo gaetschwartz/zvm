@@ -13,8 +13,25 @@ jobs:
       - name: Set up Homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
-      - run: brew tap gaetschwartz/zvm
-      - uses: Homebrew/actions/bump-formulae@master
+      - name: Extract formula path
+        id: extract-formula-path
+        run: |
+          brew tap gaetschwartz/zvm
+          # get formula path
+          formula_path=$(brew formula zvm)
+          # save output
+          echo "formula_path=$formula_path" >> $GITHUB_ENV
+      - name: Extract version
+        id: extract-version
+        run: echo "tag-name=${GITHUB_REF#refs/tags/}"
+      - uses: mislav/bump-homebrew-formula-action@v2
         with:
-          formulae: zvm
-          token: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
+          formula-name: zvm
+          formula-path: ${{ steps.extract-formula-path.outputs.formula_path }}
+          homebrew-tap: gaetschwartz/zvm
+          base-branch: master
+          download-url: https://github.com/gaetschwartz/zvm/releases/download/${{ steps.extract-version.outputs.tag-name }}/zvm-x86_64-macos
+          commit-message: |
+            {{formulaName}} {{version}}
+        env:
+          COMMITTER_TOKEN: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
