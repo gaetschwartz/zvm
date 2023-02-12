@@ -1,9 +1,9 @@
 name: Homebrew Deploy
 
 on:
-  workflow_dispatch:
   release:
     types: [published, released]
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -23,7 +23,9 @@ jobs:
           echo "formula_path=$formula_path" >> $GITHUB_ENV
       - name: Extract version
         id: extract-version
-        run: echo "tag-name=${GITHUB_REF#refs/tags/}"
+        run: |
+          tag_name=$(git describe --tags --abbrev=0)
+          echo "tag-name=$tag_name" >> $GITHUB_ENV
       - uses: mislav/bump-homebrew-formula-action@v2
         with:
           formula-name: zvm
