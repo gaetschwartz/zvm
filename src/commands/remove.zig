@@ -1,6 +1,6 @@
 const std = @import("std");
 const mem = std.mem;
-const ansi = @import("../ansi.zig");
+const ansi = @import("ansi");
 const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const RunContext = @import("../arg_parser.zig").ArgParser.RunContext;

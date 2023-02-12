@@ -10,12 +10,13 @@ const remove_cmd = @import("commands/remove.zig").remove_cmd;
 const use_cmd = @import("commands/use.zig").use_cmd;
 const zig_cmd = @import("commands/zig.zig").zig_cmd;
 const releases_cmd = @import("commands/releases.zig").releases_cmd;
+const destroy_cmd = @import("commands/destroy.zig").destroy_cmd;
 const zvmDir = @import("utils.zig").zvmDir;
 const path = std.fs.path;
 const root = @import("root");
 const build_options = @import("zvm_build_options");
 const builtin = @import("builtin");
-const ansi = @import("ansi.zig");
+const ansi = @import("ansi");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -108,6 +109,11 @@ pub fn main() !void {
                 .optional = true,
             },
         },
+    });
+    _ = try parser.addCommand(.{
+        .name = "destroy",
+        .description = "Destroy the current zvm installation",
+        .handler = &destroy_cmd,
     });
     _ = try parser.addCommand(.{
         .name = "spawn",
@@ -273,16 +279,17 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
             try stdout.print("{s}\n", .{build_options.version});
             return;
         }
-        const start = comptime "  " ++ ansi.fade("-") ++ ansi.BLUE ++ ansi.BOLD;
-        const end = comptime ansi.RESET ++ "\n";
-        try stdout.print(start ++ " version          " ++ ansi.RESET_BOLD ++ (build_options.version) ++ end, .{});
-        try stdout.print(start ++ " commit_hash  " ++ ansi.RESET_BOLD ++ (build_options.git_commit orelse "unknown") ++ end, .{});
-        try stdout.print(start ++ " build_date   " ++ ansi.RESET_BOLD ++ (build_options.build_date orelse "unknown") ++ end, .{});
+        const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.BLUE) ++ ansi.c(.BOLD);
+        const end = comptime ansi.c(.reset) ++ "\n";
+        const rstBold = comptime ansi.c(.reset_bold);
+        try stdout.print(start ++ " version          " ++ rstBold ++ (build_options.version) ++ end, .{});
+        try stdout.print(start ++ " commit_hash  " ++ rstBold ++ (build_options.git_commit orelse "unknown") ++ end, .{});
+        try stdout.print(start ++ " build_date   " ++ rstBold ++ (build_options.build_date orelse "unknown") ++ end, .{});
         // branch
-        try stdout.print(start ++ " branch       " ++ ansi.RESET_BOLD ++ (build_options.git_branch orelse "unknown") ++ end, .{});
-        try stdout.print(start ++ " zig          " ++ ansi.RESET_BOLD ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end, .{});
+        try stdout.print(start ++ " branch       " ++ rstBold ++ (build_options.git_branch orelse "unknown") ++ end, .{});
+        try stdout.print(start ++ " zig          " ++ rstBold ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end, .{});
         if (verbose) {
-            try stdout.print(start ++ " is_ci        " ++ ansi.RESET_BOLD ++ (build_options.is_ci) ++ end, .{});
+            try stdout.print(start ++ " is_ci        " ++ rstBold ++ (build_options.is_ci) ++ end, .{});
         }
         return;
     }

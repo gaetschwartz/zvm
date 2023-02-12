@@ -5,8 +5,7 @@ const ParsedArgs = arg_parser.ParsedArgs;
 const Command = arg_parser.Command;
 const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
-const path = std.fs.path;
-const ansi = @import("../ansi.zig");
+const ansi = @import("ansi");
 
 pub fn use_cmd(ctx: ArgParser.RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -21,7 +20,7 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
     const force = ctx.args.hasFlag("force");
 
     const zvm = try zvmDir(allocator);
-    const target_version = try path.join(allocator, &[_][]const u8{ zvm, "versions", target });
+    const target_version = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target });
     // check if the target version exists
     std.fs.accessAbsolute(target_version, .{}) catch |err| switch (err) {
         error.FileNotFound => {
@@ -35,7 +34,7 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
     };
 
     if (global) {
-        const global_version_path = try path.join(allocator, &[_][]const u8{ zvm, "global" });
+        const global_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "default" });
         // remove the current symlink if it exists
         std.fs.deleteFileAbsolute(global_version_path) catch |err| switch (err) {
             error.FileNotFound => {},
@@ -43,6 +42,35 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
         };
         // create the new symlink
         try std.fs.symLinkAbsolute(target_version, global_version_path, .{});
+        // check the current path and check if the current version is in the path
+        const path: ?[]const u8 = std.process.getEnvVarOwned(allocator, "PATH") catch |err| switch (err) {
+            error.EnvironmentVariableNotFound => null,
+            else => return err,
+        };
+        defer if (path) |p|
+            allocator.free(p);
+
+        if (path) |p| {
+            std.log.debug("PATH environment variable found: {s}", .{p});
+            // split the path into an array
+            var iter = std.mem.split(u8, p, ":");
+            const found = blk: {
+                while (iter.next()) |path_entry| {
+                    if (std.mem.eql(u8, path_entry, global_version_path)) {
+                        break :blk true;
+                    }
+                }
+                break :blk false;
+            };
+            if (!found) {
+                try stdout.print(ansi.fade("Warning: the path {s} is not in your PATH environment variable.\n"), .{global_version_path});
+            } else {
+                std.log.debug("the path {s} is in your PATH environment variable.", .{global_version_path});
+            }
+        } else {
+            std.log.debug("PATH environment variable not found.", .{});
+        }
+
         try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " globally ✓\n", .green), .{target});
     } else {
         const cwd = std.fs.cwd();

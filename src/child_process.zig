@@ -1,11 +1,11 @@
 const std = @import("std");
 const io = std.io;
 const fs = std.fs;
-const ansi = @import("ansi.zig");
+const ansi = @import("ansi");
 
 fn printCmd(argv: []const []const u8) void {
     for (argv) |arg| {
-        std.log.debug("{s}{s}{s} ", .{ ansi.BOLD, arg, ansi.RESET_BOLD });
+        std.log.debug("{s}{s}{s} ", .{ ansi.c(.BOLD), arg, ansi.c(.RESET_BOLD) });
     }
 }
 
@@ -161,25 +161,25 @@ pub fn handleResult(res: CommandResult) void {
             switch (term.term) {
                 .Exited => |code| {
                     if (code != 0) {
-                        std.log.debug("{s}Command ", .{ansi.RED});
+                        std.log.debug("{s}Command ", .{ansi.c(.RED)});
                         printCmd(term.cmd);
-                        std.log.debug("exited with code {d}.{s}\n", .{ code, ansi.RESET });
+                        std.log.debug("exited with code {d}.{s}\n", .{ code, ansi.c(.RESET) });
                     }
                 },
                 .Signal => |signal| {
                     // std.log.debug("Command {any} was signaled with {d}\n", .{ term.cmd, signal });
-                    std.log.debug("{s}Command ", .{ansi.RED});
+                    std.log.debug("{s}Command ", .{ansi.c(.RED)});
                     printCmd(term.cmd);
-                    std.log.debug("was signaled with {d}.{s}\n", .{ signal, ansi.RESET });
+                    std.log.debug("was signaled with {d}.{s}\n", .{ signal, ansi.c(.RESET) });
                 },
                 else => {},
             }
         },
         .Error => |err| {
             // std.log.debug("Command {any} failed with error {any}\n", .{ err.cmd, err.err });
-            std.log.debug("{s}Command ", .{ansi.RED});
+            std.log.debug("{s}Command ", .{ansi.c(.RED)});
             printCmd(err.cmd);
-            std.log.debug("failed with error {any}.{s}\n", .{ err.err, ansi.RESET });
+            std.log.debug("failed with error {any}.{s}\n", .{ err.err, ansi.c(.RESET) });
         },
     }
 }

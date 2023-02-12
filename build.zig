@@ -43,6 +43,7 @@ pub fn build(b: *std.Build) void {
     const knownFolders = b.createModule(.{
         .source_file = .{ .path = "known-folders/known-folders.zig" },
     });
+    const ansi = b.createModule(.{ .source_file = .{ .path = "src/ansi.zig" } });
 
     const zvm = b.addExecutable(.{
         .name = "zvm",
@@ -51,6 +52,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     zvm.addModule("known-folders", knownFolders);
+    zvm.addModule("ansi", ansi);
     zvm.addOptions("zvm_build_options", options);
     zvm.install();
 

@@ -7,7 +7,7 @@ const zvmDir = @import("../utils.zig").zvmDir;
 const handleResult = @import("install.zig").handleResult;
 const printArgv = @import("install.zig").printArgv;
 const path = std.fs.path;
-const ansi = @import("../ansi.zig");
+const ansi = @import("ansi");
 const builtin = @import("builtin");
 
 pub fn cache_clear_cmd(ctx: ArgParser.RunContext) !void {

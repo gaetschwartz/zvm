@@ -3,7 +3,7 @@ const idx = @import("../index.zig");
 const builtin = @import("builtin");
 const http = std.http;
 const mem = std.mem;
-const ansi = @import("../ansi.zig");
+const ansi = @import("ansi");
 const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const RunContext = @import("../arg_parser.zig").ArgParser.RunContext;
@@ -113,14 +113,43 @@ pub fn install_cmd(ctx: RunContext) !void {
     const cache_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache_web, filename });
     std.log.debug("cache path: {s}", .{cache_path});
 
-    try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "...", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
+    // check if the archive is already in the cache
+    var is_cached = blk: {
+        const cached_archive = std.fs.openFileAbsolute(cache_path, .{}) catch |err| {
+            if (err == error.FileNotFound) {
+                break :blk false;
+            }
+            return err;
+        };
+        defer cached_archive.close();
+        // max size of archive is 100MB
 
-    try fetchArchiveChildProcess(.{
-        .url = archive.tarball,
-        .path = cache_path,
-        .allocator = allocator,
-        .total_size = archive.size,
-    });
+        var cached_archive_shasum: [utils.digest_length * 2]u8 = undefined;
+        // compute the shasum of the cached archive
+        try utils.shasum(cached_archive.reader(), &cached_archive_shasum);
+        // compare the shasum of the cached archive with the one in the index
+        if (std.mem.eql(u8, &cached_archive_shasum, archive.shasum)) {
+            std.log.debug("shasum match: {s} == {s}", .{ cached_archive_shasum, archive.shasum });
+            break :blk true;
+        } else {
+            std.log.debug("shasum mismatch: {s} != {s}", .{ cached_archive_shasum, archive.shasum });
+            break :blk false;
+        }
+    };
+
+    if (is_cached) {
+        std.log.debug("archive is cached", .{});
+        try stdout.print(ansi.style("Using cached archive {s}\n", .{ .green, .fade }), .{filename});
+    } else {
+        try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "...", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
+
+        try fetchArchiveChildProcess(.{
+            .url = archive.tarball,
+            .path = cache_path,
+            .allocator = allocator,
+            .total_size = archive.size,
+        });
+    }
 
     const archive_type = utils.archiveType(filename);
     switch (archive_type) {
@@ -220,7 +249,12 @@ fn fetchArchiveChildProcess(args: FetchArchiveArgs) !void {
         .windows => &[_][]const u8{ "bitsadmin", "/transfer", "zvm", args.url, args.path },
         else => &[_][]const u8{ "curl", "-L", args.url, "-o", args.path },
     };
-    std.log.debug("fetching archive with command: {any}\n", .{argv});
+    if (@import("builtin").mode == .Debug) {
+        const stderr = std.io.getStdErr().writer();
+        try stderr.print("fetching archive with command: '", .{});
+        printArgv(argv);
+        try stderr.print("'\n", .{});
+    }
     const res = try std.ChildProcess.exec(.{
         .argv = argv,
         .allocator = args.allocator,
@@ -235,18 +269,18 @@ pub fn handleResult(res: std.ChildProcess.ExecResult, cmd: [][]const u8) !void {
     switch (res.term) {
         .Exited => |code| {
             if (code != 0) {
-                std.debug.print("{s}Command ", .{ansi.RED});
+                std.debug.print("{s}Command ", .{ansi.c(.RED)});
                 printArgv(cmd);
-                std.debug.print("exited with code {d}.{s}\n", .{ code, ansi.RESET });
+                std.debug.print("exited with code {d}.{s}\n", .{ code, ansi.c(.RESET) });
                 // exit(1);
                 return error.CommandFailed;
             }
         },
         .Signal => |signal| {
             // std.log.debug("Command {any} was signaled with {d}\n", .{ term.cmd, signal });
-            std.debug.print("{s}Command ", .{ansi.RED});
+            std.debug.print("{s}Command ", .{ansi.c(.RED)});
             printArgv(cmd);
-            std.debug.print("was signaled with {d}.{s}\n", .{ signal, ansi.RESET });
+            std.debug.print("was signaled with {d}.{s}\n", .{ signal, ansi.c(.RESET) });
             // exit(1);
             return error.CommandFailed;
         },

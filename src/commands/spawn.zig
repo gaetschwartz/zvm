@@ -3,7 +3,7 @@ const idx = @import("../index.zig");
 const builtin = @import("builtin");
 const http = std.http;
 const mem = std.mem;
-const ansi = @import("../ansi.zig");
+const ansi = @import("ansi");
 const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const RunContext = @import("../arg_parser.zig").ArgParser.RunContext;
@@ -56,16 +56,16 @@ pub fn spawn_cmd(ctx: RunContext) !void {
     switch (term) {
         .Exited => |code| {
             if (code != 0) {
-                try stdout.print("{s}Command ", .{ansi.RED});
+                try stdout.print("{s}Command ", .{ansi.c(.RED)});
                 try printArgv(argv, stdout);
-                try stdout.print("exited with code {d}.{s}\n", .{ code, ansi.RESET });
+                try stdout.print("exited with code {d}.{s}\n", .{ code, ansi.c(.RESET) });
             }
         },
         .Signal => |signal| {
             // std.log.debug("Command {any} was signaled with {d}\n", .{ term.cmd, signal });
-            try stdout.print("{s}Command ", .{ansi.RED});
+            try stdout.print("{s}Command ", .{ansi.c(.RED)});
             try printArgv(argv, stdout);
-            try stdout.print("was signaled with {d}.{s}\n", .{ signal, ansi.RESET });
+            try stdout.print("was signaled with {d}.{s}\n", .{ signal, ansi.c(.RESET) });
         },
         else => {},
     }

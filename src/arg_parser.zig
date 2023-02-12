@@ -1,6 +1,6 @@
 const std = @import("std");
 const builtin = @import("builtin");
-const ansi = @import("ansi.zig");
+const ansi = @import("ansi");
 const testing = std.testing;
 
 pub fn Tuple2(comptime T1: type, comptime T2: type) type {

@@ -125,3 +125,21 @@ test "main" {
     var list = ArrayListPointers(u8).init(alloc, 0);
     _ = list;
 }
+const hashMethod = std.crypto.hash.sha2.Sha256;
+pub const digest_length = hashMethod.digest_length;
+
+pub fn shasum(reader: std.fs.File.Reader, out_buffer: *[digest_length * 2]u8) !void {
+    var hash = hashMethod.init(.{});
+    var buffer: [hashMethod.block_length]u8 = undefined;
+    while (true) {
+        const read = try reader.read(&buffer);
+        if (read == 0) break;
+        hash.update(buffer[0..read]);
+    }
+    var temp_buffer: [digest_length]u8 = undefined;
+    hash.final(temp_buffer[0..]);
+    // to hex
+    var stream = std.io.fixedBufferStream(out_buffer[0..]);
+    try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("", .{}, stream.writer());
+    std.log.debug("Wrote shasum: {s}\n", .{out_buffer[0..]});
+}

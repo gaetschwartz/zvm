@@ -5,7 +5,7 @@ const ParsedArgs = arg_parser.ParsedArgs;
 const Command = arg_parser.Command;
 const zvmDir = @import("../utils.zig").zvmDir;
 const path = std.fs.path;
-const ansi = @import("../ansi.zig");
+const ansi = @import("ansi");
 
 pub const VersionInfo = struct {
     version: []const u8,
