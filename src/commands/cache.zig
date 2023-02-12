@@ -32,7 +32,7 @@ pub fn cache_clear_cmd(ctx: ArgParser.RunContext) !void {
         .argv = argv,
         .allocator = allocator,
     });
-    handleResult(res, argv) catch {
+    handleResult(res.term, argv) catch {
         return;
     };
 }

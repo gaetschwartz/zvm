@@ -41,18 +41,18 @@ pub fn fetchIndex(allocator: std.mem.Allocator) anyerror!Index {
     var buffer = std.ArrayList(u8).init(allocator);
     defer buffer.deinit();
 
-    const BUFFER_SIZE = 1024;
     var total_read: usize = 0;
-    var temp_buffer = [_]u8{0} ** BUFFER_SIZE;
+    const BUFFER_SIZE = 4096;
+    var temp_buffer: [BUFFER_SIZE]u8 = undefined;
     while (true) {
         //std.log.debug("reading from request with state {any}\n", .{req.response.state});
-        const read: usize = try req.readAtLeast(&temp_buffer, 1);
+        const read = try req.readAll(&temp_buffer);
         total_read += read;
-        //std.log.debug("read: {d} bytes, total read: {d} ({d}B)\n", .{ read, total_read, total_read / 1024 });
+        std.log.debug("read: {d} bytes, total read: {d} ({d}B)\n", .{ read, total_read, total_read / 1024 });
         if (read == 0) break;
         try buffer.appendSlice(temp_buffer[0..read]);
     }
-    //std.log.debug("total read: {d}\n", .{total_read});
+    std.log.debug("total read: {d}\n", .{total_read});
 
     // var token_stream = std.json.TokenStream.init(array.items[0..total_read]);
     var parser = std.json.Parser.init(allocator, true);

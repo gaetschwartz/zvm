@@ -93,20 +93,7 @@ pub fn install_cmd(ctx: RunContext) !void {
         std.log.debug("version info: {}", .{version_info});
         std.log.debug("removing old version: {s}", .{version_path});
 
-        // there is a version installed, but it is not the one we want to install
-        // remove the old version recursively
-        const argv = switch (builtin.os.tag) {
-            .windows => &[_][]const u8{ "rmdir", "/s", "/q", version_path },
-            else => &[_][]const u8{ "rm", "-rf", version_path },
-        };
-        const res = try std.ChildProcess.exec(.{
-            .argv = argv,
-            .allocator = allocator,
-        });
-        handleResult(res, argv) catch |err| {
-            std.log.err("could not remove old version: {any}", .{err});
-            return;
-        };
+        try std.fs.deleteTreeAbsolute(version_path);
     }
 
     const filename = std.fs.path.basename(archive.tarball);
@@ -122,7 +109,6 @@ pub fn install_cmd(ctx: RunContext) !void {
             return err;
         };
         defer cached_archive.close();
-        // max size of archive is 100MB
 
         var cached_archive_shasum: [utils.digest_length * 2]u8 = undefined;
         // compute the shasum of the cached archive
@@ -141,7 +127,7 @@ pub fn install_cmd(ctx: RunContext) !void {
         std.log.debug("archive is cached", .{});
         try stdout.print(ansi.style("Using cached archive {s}\n", .{ .green, .fade }), .{filename});
     } else {
-        try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "...", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
+        try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "... ", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
 
         try fetchArchiveChildProcess(.{
             .url = archive.tarball,
@@ -150,6 +136,8 @@ pub fn install_cmd(ctx: RunContext) !void {
             .total_size = archive.size,
         });
     }
+
+    std.log.debug("unarchiving {s}", .{filename});
 
     const archive_type = utils.archiveType(filename);
     switch (archive_type) {
@@ -172,14 +160,14 @@ pub fn install_cmd(ctx: RunContext) !void {
     std.log.debug("archive path: {s}", .{archive_path});
     // try std.fs.renameAbsolute(archive_path, version_path);
     const argv = switch (builtin.os.tag) {
-        .windows => &[_][]const u8{ "move", archive_path, version_path },
+        .windows => &[_][]const u8{ "powershell", "-Command", "Rename-Item", archive_path, version_path, "-Force" },
         else => &[_][]const u8{ "mv", archive_path, version_path },
     };
     const res = try std.ChildProcess.exec(.{
         .argv = argv,
         .allocator = allocator,
     });
-    handleResult(res, argv) catch |err| {
+    handleResult(res.term, argv) catch |err| {
         std.log.err("could not rename archive: {any}", .{err});
         return;
     };
@@ -259,14 +247,14 @@ fn fetchArchiveChildProcess(args: FetchArchiveArgs) !void {
         .argv = argv,
         .allocator = args.allocator,
     });
-    handleResult(res, argv) catch |err| {
+    handleResult(res.term, argv) catch |err| {
         std.log.err("could not fetch archive: {any}", .{err});
         return;
     };
 }
 
-pub fn handleResult(res: std.ChildProcess.ExecResult, cmd: [][]const u8) !void {
-    switch (res.term) {
+pub fn handleResult(res: std.ChildProcess.Term, cmd: [][]const u8) !void {
+    switch (res) {
         .Exited => |code| {
             if (code != 0) {
                 std.debug.print("{s}Command ", .{ansi.c(.RED)});
@@ -290,18 +278,41 @@ pub fn handleResult(res: std.ChildProcess.ExecResult, cmd: [][]const u8) !void {
 
 /// Using child process to unzip
 fn unarchiveZip(path: []const u8, dest: []const u8, allocator: std.mem.Allocator) !void {
+    const concat = std.fmt.allocPrint(allocator, "-o{s}", .{dest}) catch |err| {
+        std.log.err("could not concat path and dest: {any}", .{err});
+        return;
+    };
+    defer allocator.free(concat);
     const argv = switch (builtin.os.tag) {
-        .windows => &[_][]const u8{ "powershell", "-Command", "Expand-Archive", path, dest },
+        .windows => if (check7Zip())
+            &[_][]const u8{ "7z", "x", path, concat, "-y" }
+        else
+            &[_][]const u8{ "powershell", "-Command", "Expand-Archive", path, dest, "-Force" },
         else => &[_][]const u8{ "unzip", path, "-d", dest },
     };
-    const res = try std.ChildProcess.exec(.{
-        .argv = argv,
-        .allocator = allocator,
-    });
+    var process = std.ChildProcess.init(argv, allocator);
+    process.stderr_behavior = .Ignore;
+    process.stdout_behavior = if (@import("builtin").mode == .Debug) .Pipe else .Ignore;
+
+    const res = try process.spawnAndWait();
+
     handleResult(res, argv) catch |err| {
         std.log.err("could not unarchive zip: {any}", .{err});
         return;
     };
+}
+
+fn check7Zip() bool {
+    const argv = &[_][]const u8{"7z"};
+    const res = std.ChildProcess.exec(.{
+        .argv = argv,
+        .allocator = std.heap.page_allocator,
+    }) catch |err| {
+        std.log.debug("could not check find 7zip: {any}", .{err});
+        return false;
+    };
+    std.log.debug("7zip found, terminated with {any}", .{res.term});
+    return res.term == .Exited and res.term.Exited == 0;
 }
 
 /// Using child process to untar
@@ -310,10 +321,10 @@ fn unarchiveTarXz(path: []const u8, dest: []const u8, allocator: std.mem.Allocat
         .windows => &[_][]const u8{ "powershell", "-Command", "Expand-Archive", path, dest },
         else => &[_][]const u8{ "tar", "-xJf", path, "-C", dest },
     };
-    const res = try std.ChildProcess.exec(.{
-        .argv = argv,
-        .allocator = allocator,
-    });
+    var process = std.ChildProcess.init(argv, allocator);
+    process.stderr_behavior = .Ignore;
+
+    const res = try process.spawnAndWait();
     handleResult(res, argv) catch |err| {
         std.log.err("could not unarchive tar.xz: {any}", .{err});
         return;
