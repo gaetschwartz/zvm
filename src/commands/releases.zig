@@ -20,8 +20,6 @@ pub fn releases_cmd(ctx: RunContext) !void {
     defer arena.deinit();
     const allocator = arena.allocator();
     const stdout = std.io.getStdOut().writer();
-    const stderr = std.io.getStdErr().writer();
-    _ = stderr;
 
     const reverse = ctx.hasFlag("reverse");
     const raw = ctx.hasFlag("raw");

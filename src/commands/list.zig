@@ -23,6 +23,14 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     _ = stderr;
 
     const zvm = try zvmDir(allocator);
+    const global_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "default", ".zvm.json" });
+    const global_version_info = vblk: {
+        break :vblk readVersionInfo(allocator, global_version_path) catch |err| switch (err) {
+            error.FileNotFound => break :vblk null,
+            else => return err,
+        };
+    };
+
     const versions = try path.join(allocator, &[_][]const u8{ zvm, "versions" });
 
     var dir = std.fs.openIterableDirAbsolute(versions, .{}) catch |err| {
@@ -51,10 +59,12 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
                 else => return err,
             }
         };
+        const is_default = global_version_info != null and std.mem.eql(u8, global_version_info.?.version, version.version) and std.mem.eql(u8, global_version_info.?.channel orelse "", version.channel orelse "");
+        const startSymbol = if (is_default) (comptime ansi.c(.green) ++ "✓") else comptime ansi.fade("-");
         if (version.channel) |channel| {
-            try stdout.print("  - {s} " ++ ansi.fade("({s})\x0a"), .{ channel, version.version });
+            try stdout.print("  {s} {s} " ++ ansi.fade("({s})\x0a") ++ ansi.c(.reset), .{ startSymbol, channel, version.version });
         } else {
-            try stdout.print("  - {s}\x0a", .{version.version});
+            try stdout.print("  {s} {s}\x0a" ++ ansi.c(.reset), .{ startSymbol, version.version });
         }
     }
 }

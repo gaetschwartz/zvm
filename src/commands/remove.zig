@@ -33,8 +33,7 @@ pub fn remove_cmd(ctx: RunContext) !void {
     // check if the version is installed
     dir.access(target, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            try stderr.print(ansi.style("Version " ++ ansi.bold("{s}") ++ " is not installed yet.\n", .red), .{target});
-            try stdout.print(ansi.style("Use " ++ ansi.bold("zvm install {s}") ++ " to install the version.\n", .green), .{target});
+            try stderr.print(ansi.style("Version " ++ ansi.bold("{s}") ++ " is not installed.\n", .yellow), .{target});
             return;
         },
         else => return err,
