@@ -29,6 +29,9 @@ pub const Colors = struct {
     pub const BG_WHITE = "\x1b[47m";
     pub const BG_RESET = "\x1b[49m";
     pub const ITALIC = "\x1b[3m";
+    pub const BLINK = "\x1b[5m";
+    pub const UNDERLINE = "\x1b[4m";
+    pub const REVERSE = "\x1b[7m";
 };
 pub fn c(comptime color: @TypeOf(.EnumLiteral)) []const u8 {
     return colorOfEnum(color);
@@ -76,6 +79,14 @@ pub fn fade(comptime text: []const u8) []const u8 {
 
 pub fn bold(comptime text: []const u8) []const u8 {
     return c(.BOLD) ++ text ++ c(.RESET_BOLD);
+}
+
+pub fn italic(comptime text: []const u8) []const u8 {
+    return c(.ITALIC) ++ text ++ c(.RESET);
+}
+
+pub fn blink(comptime text: []const u8) []const u8 {
+    return c(.BLINK) ++ text ++ c(.RESET);
 }
 
 fn lowerCase(comptime text: []const u8) []const u8 {
