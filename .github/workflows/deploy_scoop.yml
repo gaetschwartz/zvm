@@ -11,10 +11,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Clone scoop
-        uses: actions/checkout@v2
-        with:
-          repository: ScoopInstaller/Scoop
-          path: scoop
+        run: git clone https://github.com/ScoopInstaller/Scoop scoop
       - name: Clone scoop-zvm
         uses: actions/checkout@v2
         with:
@@ -25,8 +22,8 @@ jobs:
       - name: Commit the changes to zvm.json
         working-directory: scoop-zvm
         run: |
-          git config --global user.name "CLI bot"
-          git config --global user.email "blaxoujunior@gmail.com"
+          git config user.name github-actions
+          git config user.email github-actions@github.com
           git add zvm.json
           $tag_name = (Get-Content .\zvm.json -Raw | ConvertFrom-Json).version
           git commit -m "Update zvm to $tag_name"
