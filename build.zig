@@ -66,16 +66,29 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run unit tests");
-    registerTest(b, test_step, .{
+    const arg_parser_test = registerTest(b, test_step, .{
         .root_source_file = .{ .path = "src/arg_parser.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    arg_parser_test.addModule("ansi", ansi);
+
+    _ = registerTest(b, test_step, .{
+        .root_source_file = .{ .path = "src/index.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    _ = registerTest(b, test_step, .{
+        .root_source_file = .{ .path = "src/ansi.zig" },
         .target = target,
         .optimize = optimize,
     });
 }
 
-inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.TestOptions) void {
+inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.TestOptions) *std.Build.CompileStep {
     const exe_tests = b.addTest(options);
     step.dependOn(&exe_tests.step);
+    return exe_tests;
 }
 
 fn git_commit(allocator: std.mem.Allocator) ?[40]u8 {

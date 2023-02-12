@@ -46,13 +46,7 @@ fn colorOfEnum(comptime color: @TypeOf(.EnumLiteral)) []const u8 {
     if (@hasDecl(Colors, upperTagName)) {
         return @field(Colors, upperTagName);
     }
-    const ansiTypeInfo = @typeInfo(Colors);
-    const decls = ansiTypeInfo.Struct.decls;
-    var availableDecls = "";
-    for (decls) |decl| {
-        availableDecls = availableDecls ++ decl.name ++ ", ";
-    }
-    @compileError("Invalid color: " ++ tagName ++ " Info: " ++ std.fmt.comptimePrint("info = {any}\n", .{ansiTypeInfo}) ++ ". Available colors: " ++ availableDecls);
+    @compileError("Invalid color: " ++ tagName);
 }
 
 pub fn style(comptime text: []const u8, comptime colors: anytype) []const u8 {
@@ -105,4 +99,53 @@ fn upperCase(comptime text: []const u8) []const u8 {
         out[i] = std.ascii.toUpper(text[i]);
     }
     return out[0..];
+}
+
+fn lowerCaseFirst(comptime text: []const u8) []const u8 {
+    var out: [text.len]u8 = undefined;
+    var i: usize = 0;
+    while (i < text.len) : (i += 1) {
+        if (i == 0) {
+            out[i] = std.ascii.toLower(text[i]);
+        } else {
+            out[i] = text[i];
+        }
+    }
+    return out[0..];
+}
+
+test "all colors can be resolved" {
+    comptime {
+        _ = c(.BLUE_BOLD);
+        _ = c(.BLUE);
+        _ = c(.GREEN_BOLD);
+        _ = c(.GREEN);
+        _ = c(.RED_BOLD);
+        _ = c(.RED);
+        _ = c(.YELLOW_BOLD);
+        _ = c(.YELLOW);
+        _ = c(.CYAN_BOLD);
+        _ = c(.CYAN);
+        _ = c(.MAGENTA_BOLD);
+        _ = c(.MAGENTA);
+        _ = c(.WHITE_BOLD);
+        _ = c(.WHITE);
+        _ = c(.BOLD);
+        _ = c(.FADE);
+        _ = c(.RESET);
+        _ = c(.RESET_BOLD);
+        _ = c(.RESET_FADE);
+        _ = c(.BG_RED);
+        _ = c(.BG_GREEN);
+        _ = c(.BG_YELLOW);
+        _ = c(.BG_BLUE);
+        _ = c(.BG_MAGENTA);
+        _ = c(.BG_CYAN);
+        _ = c(.BG_WHITE);
+        _ = c(.BG_RESET);
+        _ = c(.ITALIC);
+        _ = c(.BLINK);
+        _ = c(.UNDERLINE);
+        _ = c(.REVERSE);
+    }
 }

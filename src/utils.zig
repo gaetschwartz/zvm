@@ -119,12 +119,6 @@ pub fn ArrayListPointers(comptime T: type) type {
     };
 }
 
-test "main" {
-    var alloc = std.testing.allocator;
-
-    var list = ArrayListPointers(u8).init(alloc, 0);
-    _ = list;
-}
 const hashMethod = std.crypto.hash.sha2.Sha256;
 pub const digest_length = hashMethod.digest_length;
 
