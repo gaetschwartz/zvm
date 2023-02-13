@@ -73,6 +73,7 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
+          token: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
           tag_name: ${{ steps.git-version.outputs.version }}
           files: artifacts/*/*
           body: |
