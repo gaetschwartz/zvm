@@ -33,4 +33,4 @@ jobs:
       - name: Push the changes
         working-directory: homebrew-zvm
         run: |
-          git push https://${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}@github.com/gaetschwartz/homebrew-zvm.git HEAD:master
+          git push https://${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}@github.com/gaetschwartz/homebrew-zvm.git HEAD:main
