@@ -18,7 +18,9 @@ jobs:
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
       - name: Update zvm.rb
-        run: python zvm/ci/update_formula.py zvm zvm.rb
+        run: |
+          brew tap gaetschwartz/zvm
+          python zvm/ci/update_formula.py zvm zvm.rb
       - name: Commit the changes to zvm.rb
         run: |
           git config user.name github-actions
