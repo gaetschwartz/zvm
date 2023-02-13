@@ -11,6 +11,7 @@ const use_cmd = @import("commands/use.zig").use_cmd;
 const zig_cmd = @import("commands/zig.zig").zig_cmd;
 const releases_cmd = @import("commands/releases.zig").releases_cmd;
 const destroy_cmd = @import("commands/destroy.zig").destroy_cmd;
+const config_cmd = @import("commands/config.zig").config_cmd;
 const zvmDir = @import("utils.zig").zvmDir;
 const path = std.fs.path;
 const root = @import("root");
@@ -251,6 +252,60 @@ pub fn main() !void {
             },
         },
     });
+    const cfg = try parser.addCommand(.{
+        .name = "config",
+        .description = "Configure zvm.",
+        .handler = &config_cmd,
+        .flags = &[_]Command.Flag{
+            .{
+                .name = 'v',
+                .long_name = "verbose",
+                .description = "show verbose output",
+                .optional = true,
+            },
+        },
+    });
+
+    _ = try cfg.addCommand(.{
+        .name = "set",
+        .description = "Set a config value",
+        .handler = &config_cmd,
+        .flags = &[_]Command.Flag{
+            .{
+                .name = 'v',
+                .long_name = "verbose",
+                .description = "show verbose output",
+                .optional = true,
+            },
+        },
+        .positionals = &[_]Command.Positional{
+            .{
+                .name = "key",
+                .description = "the config key to set",
+            },
+            .{
+                .name = "value",
+                .description = "the value to set",
+                .optional = true,
+            },
+        },
+    });
+
+    // clear config
+    _ = try cfg.addCommand(.{
+        .name = "clear",
+        .description = "Reset the config to default",
+        .handler = &config_cmd,
+        .flags = &[_]Command.Flag{
+            .{
+                .name = 'v',
+                .long_name = "verbose",
+                .description = "show verbose output",
+                .optional = true,
+            },
+        },
+    });
+
     _ = try cache_command.addCommand(.{
         .name = "size",
         .description = "Show the size of the zvm cache",
@@ -288,6 +343,8 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         // branch
         try stdout.print(start ++ " branch       " ++ rstBold ++ (build_options.git_branch orelse "unknown") ++ end, .{});
         try stdout.print(start ++ " zig          " ++ rstBold ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end, .{});
+        try stdout.print(start ++ " target       " ++ rstBold ++ std.fmt.comptimePrint("{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) }) ++ end, .{});
+
         if (verbose) {
             try stdout.print(start ++ " is_ci        " ++ rstBold ++ (build_options.is_ci) ++ end, .{});
         }

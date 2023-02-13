@@ -3,3 +3,4 @@ zig-cache/
 .DS_Store
 temp/
 .vscode/
+.zvm

@@ -6,6 +6,7 @@ const Command = arg_parser.Command;
 const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const ansi = @import("ansi");
+const config = @import("config.zig");
 
 pub fn use_cmd(ctx: ArgParser.RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -20,9 +21,30 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
     const force = ctx.args.hasFlag("force");
 
     const zvm = try zvmDir(allocator);
-    const target_version = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target });
+    var target_version_path: []const u8 = undefined;
+
+    if (std.mem.eql(u8, target, "git")) {
+        const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+        if (cfg.git_dir_path) |git_dir_path| {
+            std.log.debug("git_dir_path: {s}", .{git_dir_path});
+            target_version_path = git_dir_path;
+        } else {
+            try stderr.print(
+                ansi.style("You haven't setup a git repository of zig yet." ++
+                    " Use " ++ ansi.bold("zvm config set git_dir_path <path>") ++
+                    " to set one up.\n", .red),
+                .{},
+            );
+            return;
+        }
+    } else {
+        std.log.debug("no git_dir_path", .{});
+        target_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target });
+    }
+
+    std.log.debug("target_version_path: {s}", .{target_version_path});
     // check if the target version exists
-    std.fs.accessAbsolute(target_version, .{}) catch |err| switch (err) {
+    std.fs.accessAbsolute(target_version_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
             try stderr.print(
                 ansi.style("Version " ++ ansi.bold("{s}") ++ " doesn't appear to be installed.\n", .red),
@@ -41,7 +63,7 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
             else => return err,
         };
         // create the new symlink
-        try std.fs.symLinkAbsolute(target_version, global_version_path, .{ .is_directory = true });
+        try std.fs.symLinkAbsolute(target_version_path, global_version_path, .{ .is_directory = true });
         // check the current path and check if the current version is in the path
         const path: ?[]const u8 = std.process.getEnvVarOwned(allocator, "PATH") catch |err| switch (err) {
             error.EnvironmentVariableNotFound => null,
@@ -97,7 +119,7 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
             else => return err,
         };
         // create the new symlink
-        try cwd.symLink(target_version, ".zvm", .{});
+        try cwd.symLink(target_version_path, ".zvm", .{});
         try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " in this directory.\n", .green), .{target});
     }
 }

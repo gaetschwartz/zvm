@@ -7,6 +7,7 @@ const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const path = std.fs.path;
 const ansi = @import("ansi");
+const config = @import("config.zig");
 
 pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -19,14 +20,14 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     const cwd = std.fs.cwd();
     // check if the cwd is a zvm project
     var buffer = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
-    const zig_version = blk: {
+    const zvm = try zvmDir(allocator);
+    const zig_dir_path = blk: {
         break :blk cwd.readLink(".zvm", buffer[0..]) catch |err| switch (err) {
             error.FileNotFound => {
                 std.log.debug(
                     "No version is configured for this project. Try running " ++ ansi.bold("zvm use <version>") ++ ".\n",
                     .{},
                 );
-                const zvm = try zvmDir(allocator);
                 const global_version_path = try path.join(allocator, &[_][]const u8{ zvm, "default" });
                 // remove the current symlink if it exists
                 break :blk global_version_path;
@@ -34,9 +35,9 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
             else => |e| return e,
         };
     };
-    std.fs.accessAbsolute(zig_version, .{}) catch |err| switch (err) {
+    std.fs.accessAbsolute(zig_dir_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            const name = path.basename(zig_version);
+            const name = path.basename(zig_dir_path);
             try stderr.print(ansi.style(
                 "Failed to find the symlinked zig version. Try re-running " ++ ansi.bold("zvm install {s}\n"),
                 .red,
@@ -45,7 +46,26 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
         },
         else => |e| return e,
     };
-    const zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_version, "zig" });
+
+    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    var zig_path: []const u8 = undefined;
+    if (cfg.git_dir_path) |git_dir_path| {
+        std.log.debug("git_dir_path: {s}", .{git_dir_path});
+        var temp: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+        const symlinked = std.fs.readLinkAbsolute(zig_dir_path, &temp) catch |err| switch (err) {
+            error.NotLink => zig_dir_path,
+            else => |e| return e,
+        };
+        if (std.mem.eql(u8, symlinked, git_dir_path)) {
+            // symlinked to the same path, so we need to update it
+            zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig-out", "bin", "zig" });
+        } else {
+            zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig" });
+        }
+    } else {
+        std.log.debug("git_dir_path: null", .{});
+        zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig" });
+    }
 
     var argvs = std.ArrayList([]const u8).init(allocator);
     try argvs.append(zig_path);

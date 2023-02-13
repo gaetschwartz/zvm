@@ -6,6 +6,7 @@ const Command = arg_parser.Command;
 const zvmDir = @import("../utils.zig").zvmDir;
 const path = std.fs.path;
 const ansi = @import("ansi");
+const config = @import("config.zig");
 
 pub const VersionInfo = struct {
     version: []const u8,
@@ -23,16 +24,70 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     _ = stderr;
 
     const zvm = try zvmDir(allocator);
-    const global_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "default", ".zvm.json" });
-    const global_version_info = vblk: {
-        break :vblk readVersionInfo(allocator, global_version_path) catch |err| switch (err) {
-            error.FileNotFound => break :vblk null,
-            else => return err,
+    const global_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "default" });
+    // read symlink
+    var temp: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+    const symlinked_path = blk: {
+        break :blk std.fs.readLinkAbsolute(global_version_path, &temp) catch |err| {
+            switch (err) {
+                error.FileNotFound => {
+                    std.log.debug("global version not found", .{});
+                    break :blk null;
+                },
+                else => return err,
+            }
         };
     };
+    try stdout.print("Installed versions:\x0a", .{});
 
-    if (@import("builtin").mode == .Debug) {
-        std.log.debug("global_version_info: {any}", .{global_version_info});
+    // ? get current config and check if there is a git path setup
+    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    defer config.freeConfig(allocator, cfg);
+    if (cfg.git_dir_path) |git_dir_path| {
+        blk: {
+            std.log.debug("git_dir_path: {s}", .{git_dir_path});
+            var git_dir = std.fs.openDirAbsolute(git_dir_path, .{}) catch |err|
+                switch (err) {
+                error.FileNotFound => {
+                    std.log.debug("git_dir_path not found", .{});
+                    break :blk;
+                },
+                else => return err,
+            };
+
+            defer git_dir.close();
+
+            const zig_path = try path.join(allocator, &[_][]const u8{ git_dir_path, "zig-out", "bin", "zig" });
+
+            // exec zig version
+            const res = std.ChildProcess.exec(.{ .allocator = allocator, .argv = &[_][]const u8{ zig_path, "version" } }) catch |err| {
+                switch (err) {
+                    error.FileNotFound => {
+                        std.log.err("zig not found in git_dir_path ({s})", .{git_dir_path});
+                        break :blk;
+                    },
+                    else => return err,
+                }
+            };
+            defer allocator.free(res.stdout);
+            defer allocator.free(res.stderr);
+
+            // read the output
+            var version = res.stdout;
+            for (version) |*c| {
+                if (c.* == '\n') {
+                    c.* = 0;
+                    break;
+                }
+            }
+
+            // print the output
+            const is_default = symlinked_path != null and std.mem.eql(u8, symlinked_path.?, git_dir_path);
+            const startSymbol = if (is_default) (comptime ansi.c(.green) ++ ">") else comptime ansi.fade("-");
+            try stdout.print("  {s} {s} " ++ ansi.fade("(git)\x0a") ++ ansi.c(.reset), .{ startSymbol, version });
+        }
+    } else {
+        std.log.debug("no git_dir_path", .{});
     }
 
     const versions = try path.join(allocator, &[_][]const u8{ zvm, "versions" });
@@ -49,7 +104,6 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     defer dir.close();
 
     var it = dir.iterate();
-    try stdout.print("Installed versions:\x0a", .{});
 
     while (try it.next()) |entry| {
         if (entry.kind != .Directory) continue;
@@ -64,7 +118,7 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
             }
         };
 
-        const is_default = global_version_info != null and std.mem.eql(u8, global_version_info.?.version, version.version) and std.mem.eql(u8, global_version_info.?.channel orelse "", version.channel orelse "");
+        const is_default = symlinked_path != null and std.mem.eql(u8, symlinked_path.?, std.fs.path.dirname(version_info_path).?);
         const startSymbol = if (is_default) (comptime ansi.c(.green) ++ ">") else comptime ansi.fade("-");
         if (version.channel) |channel| {
             try stdout.print("  {s} {s} " ++ ansi.fade("({s})\x0a") ++ ansi.c(.reset), .{ startSymbol, version.version, channel });
@@ -90,6 +144,7 @@ pub fn readVersionInfo(allocator: std.mem.Allocator, version_path: []const u8) !
     var stream = std.json.TokenStream.init(buffer);
     const version = try std.json.parse(VersionInfo, &stream, .{
         .allocator = allocator,
+        .ignore_unknown_fields = true,
     });
     return version;
 }

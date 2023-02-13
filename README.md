@@ -15,6 +15,8 @@ brew install zvm
 scoop bucket add zvm https://github.com/gaetschwartz/scoop-zvm
 scoop install zvm
 ```
+*Note: Due to [an issue with Expand-Archive](https://github.com/PowerShell/Microsoft.PowerShell.Archive/issues/32) on Windows it is recommended to install `7zip` and add it to your PATH. Zvm will automatically use it if it is available.
+This can be done by running `scoop install 7zip`.*
 
 #### Manually
 

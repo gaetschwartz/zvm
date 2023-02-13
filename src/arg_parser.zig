@@ -187,9 +187,19 @@ pub const ParsedArgs = struct {
             stderr.print(ansi.style("Missing required option: " ++ ansi.bold("{s}\n"), .red), .{option.long_name.?}) catch {};
             std.os.exit(1);
         }
-        if (self.positionals.items.len < command.positionals.len) {
-            const missing = command.positionals[self.positionals.items.len];
-            stderr.print(ansi.style("Missing required positional: " ++ ansi.bold("{s}\n"), .red), .{missing.name}) catch {};
+        var i: usize = 0;
+        var hasSeenOptional = false;
+        while (i < command.positionals.len) : (i += 1) {
+            const positional = command.positionals[i];
+            if (positional.optional) {
+                hasSeenOptional = true;
+                continue;
+            } else if (hasSeenOptional) {
+                stderr.print(ansi.style("Required positional cannot come after optional positional: " ++ ansi.bold("{s}\n"), .red), .{positional.name}) catch {};
+                std.os.exit(1);
+            }
+            if (self.positionals.items.len > i) continue;
+            stderr.print(ansi.style("Missing required positional: " ++ ansi.bold("{s}\n"), .red), .{positional.name}) catch {};
             std.os.exit(1);
         }
     }
@@ -246,6 +256,8 @@ pub const ArgParser = struct {
             var i: usize = 0;
             while (i < self.command.positionals.len) : (i += 1) {
                 if (std.mem.eql(u8, self.command.positionals[i].name, name)) {
+                    // if out of bounds, return null
+                    if (self.args.positionals.items.len <= i) return null;
                     return self.args.positionals.items[i].t2;
                 }
             }
