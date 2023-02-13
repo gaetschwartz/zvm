@@ -105,7 +105,9 @@ def main(forumla: str, overwrite_path: Optional[str] = None):
         )
         # get all submodules
         # git submodule
-        output: str = subprocess.check_output(["git", "submodule"], encoding="utf-8").strip()
+        output: str = subprocess.check_output(
+            ["git", "submodule"], encoding="utf-8", cwd="zvm-repo/"
+        ).strip()
         known_folders_hash = output.splitlines()[0].split(" ")[0]
         new_known_folders_url = (
             "https://github.com/ziglibs/known-folders/archive/" + known_folders_hash + ".tar.gz"
