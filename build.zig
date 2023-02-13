@@ -18,7 +18,7 @@ pub fn build(b: *std.Build) void {
     defer arena.deinit();
 
     const options = b.addOptions();
-    if (git_commit(allocator)) |commit| {
+    if (gitCommit(allocator)) |commit| {
         options.addOption(?[]const u8, "git_commit", commit[0..]);
     } else {
         options.addOption(?[]const u8, "git_commit", null);
@@ -91,13 +91,14 @@ inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.
     return exe_tests;
 }
 
-fn git_commit(allocator: std.mem.Allocator) ?[40]u8 {
+fn gitCommit(allocator: std.mem.Allocator) ?[40]u8 {
     const exec_result = std.ChildProcess.exec(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-parse", "--verify", "HEAD" },
     }) catch return null;
     defer allocator.free(exec_result.stdout);
     defer allocator.free(exec_result.stderr);
+    if (exec_result.term != .Exited or exec_result.term.Exited != 0) return null;
 
     // +1 for trailing newline.
     if (exec_result.stdout.len != 40 + 1) return null;
@@ -115,6 +116,7 @@ fn commitCount(allocator: std.mem.Allocator) ?u8 {
     }) catch return null;
     defer allocator.free(exec_result.stdout);
     defer allocator.free(exec_result.stderr);
+    if (exec_result.term != .Exited or exec_result.term.Exited != 0) return null;
 
     var i: usize = 0;
     var number: u8 = 0;
