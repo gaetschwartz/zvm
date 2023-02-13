@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone homebrew-zvm
-        run: git clone https://github.com/gaetschwartz/homebrew-zvm
+        run: git clone https://github.com/gaetschwartz/homebrew-zvm homebrew-zvm
       - name: Clone zvm
         run: git clone https://github.com/gaetschwartz/zvm zvm-repo
       - name: Set up Homebrew
@@ -21,8 +21,9 @@ jobs:
         run: |
           brew tap gaetschwartz/zvm
           brew developer on
-          python zvm-repo/ci/update_formula.py zvm zvm.rb
+          python zvm-repo/ci/update_formula.py zvm homebrew-zvm/zvm.rb
       - name: Commit the changes to zvm.rb
+        working-directory: homebrew-zvm
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
@@ -30,5 +31,6 @@ jobs:
           $tag_name = $(brew livecheck --json zvm | jq ".[0].version.latest" -r)
           git commit -m "Update zvm to $tag_name"
       - name: Push the changes
+        working-directory: homebrew-zvm
         run: |
           git push https://${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}@github.com/gaetschwartz/homebrew-zvm.git HEAD:master
