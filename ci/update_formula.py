@@ -108,34 +108,34 @@ def main(forumla: str, overwrite_path: Optional[str] = None):
         content = newContent
         # get all submodules
         # git submodule
-        output: str = subprocess.check_output(
-            ["git", "submodule"], encoding="utf-8", cwd="zvm-repo/"
-        ).strip()
-        known_folders_hash = output.splitlines()[0].split(" ")[0]
-        new_known_folders_url = (
-            "https://github.com/ziglibs/known-folders/archive/" + known_folders_hash + ".tar.gz"
-        )
+        #         output: str = subprocess.check_output(
+        #             ["git", "submodule"], encoding="utf-8", cwd="zvm-repo/"
+        #         ).strip()
+        #         known_folders_hash = output.splitlines()[0].split(" ")[0]
+        #         new_known_folders_url = (
+        #             "https://github.com/ziglibs/known-folders/archive/" + known_folders_hash + ".tar.gz"
+        #         )
 
-        known_folders_shasum = hash_for_url(new_known_folders_url)
+        #         known_folders_shasum = hash_for_url(new_known_folders_url)
 
-        # replace the regex to find : 'url "
-        content = re.sub(
-            r"""
-  resource "known-folders" do
-    url "https:\/\/github\.com\/ziglibs\/known-folders\/archive\/[a-f0-9]+\.tar\.gz\"
-    sha256 \"[a-f0-9]+\"
-  end
-""",
-            r"""
-  resource "known-folders" do
-    url "https://github.com/ziglibs/known-folders/archive/{}.tar.gz"
-    sha256 "{}"
-  end
-""".format(
-                known_folders_hash, known_folders_shasum
-            ),
-            content,
-        )
+        #         # replace the regex to find : 'url "
+        #         content = re.sub(
+        #             r"""
+        #   resource "known-folders" do
+        #     url "https:\/\/github\.com\/ziglibs\/known-folders\/archive\/[a-f0-9]+\.tar\.gz\"
+        #     sha256 \"[a-f0-9]+\"
+        #   end
+        # """,
+        #             r"""
+        #   resource "known-folders" do
+        #     url "https://github.com/ziglibs/known-folders/archive/{}.tar.gz"
+        #     sha256 "{}"
+        #   end
+        # """.format(
+        #                 known_folders_hash, known_folders_shasum
+        #             ),
+        #             content,
+        #         )
 
         print("Updated version")
         print(content)
