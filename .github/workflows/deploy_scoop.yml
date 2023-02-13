@@ -2,7 +2,7 @@ name: Scoop Deploy
 
 on:
   release:
-    types: [published, released]
+    types: [released]
   workflow_dispatch:
 
 jobs:
