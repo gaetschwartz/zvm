@@ -13,10 +13,7 @@ jobs:
       - name: Clone scoop
         run: git clone https://github.com/ScoopInstaller/Scoop scoop
       - name: Clone scoop-zvm
-        uses: actions/checkout@v3
-        with:
-          repository: gaetschwartz/scoop-zvm
-          path: scoop-zvm
+        run: git clone https://github.com/gaetschwartz/scoop-zvm scoop-zvm
       - name: Update zvm.json
         run: scoop/bin/checkver.ps1 -Update -ForceUpdate scoop-zvm/zvm.json
       - name: Commit the changes to zvm.json

@@ -11,21 +11,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone homebrew-zvm
-        uses: actions/checkout@v3
-        with:
-          repository: gaetschwartz/homebrew-zvm
-
+        run: git clone https://github.com/gaetschwartz/homebrew-zvm
+      - name: Clone zvm
+        run: git clone https://github.com/gaetschwartz/zvm zvm
       - name: Set up Homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
       - name: Update zvm.rb
-        run: python ci/update_formula.py zvm zvm.rb
+        run: python zvm/ci/update_formula.py zvm zvm.rb
       - name: Commit the changes to zvm.rb
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add zvm.rb
-          $tag_name = $(brew livecheck --json zvm | jq ".[0].version.current" -r)
+          $tag_name = $(brew livecheck --json zvm | jq ".[0].version.latest" -r)
           git commit -m "Update zvm to $tag_name"
       - name: Push the changes
         run: |
