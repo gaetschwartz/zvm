@@ -79,8 +79,10 @@ def main(forumla: str, overwrite_path: Optional[str] = None):
     # parse json
     data = json.loads(output)[0]
     latest = data["version"]["latest"]
-    if data["version"]["current"] == latest:
+    current = data["version"]["current"]
+    if current == latest:
         print("No update needed.")
+        return
     print("Updating formula to {}".format(latest))
     # brew formula
     cmd = ["brew", "formula", forumla]
@@ -90,19 +92,20 @@ def main(forumla: str, overwrite_path: Optional[str] = None):
     with open(formula_path, "r") as f:
         content = f.read()
         # replace the regex to find : 'url "https://github.com/gaetschwartz/zvm/archive/<version>.tar.gz"'
-        new_url = "https:/github.com/gaetschwartz/zvm/archive/{}.tar.gz".format(latest)
+        url_fmt = "https:/github.com/gaetschwartz/zvm/archive/{}.tar.gz"
+        old_url = url_fmt.format(current)
+        new_url = url_fmt.format(latest)
+        old_hash = hash_for_url(old_url)
         new_hash = hash_for_url(new_url)
-        content = re.sub(
-            r"""
-  url \"https:\/\/github\.com\/gaetschwartz\/zvm\/archive\/((?:\d\.)+\d)\.tar\.gz\"
-  sha256 \"[a-f0-9]+\"""",
-            '''
-  url "{}"
-  sha256 "{}"'''.format(
-                new_url, new_hash
-            ),
-            content,
+        newContent = re.sub('url "{}"'.format(old_url), 'url "{}"'.format(new_url), content)
+        newContent = re.sub(
+            'sha256 "{}"'.format(old_hash), 'sha256 "{}"'.format(new_hash), newContent
         )
+        if newContent == content and data["version"]["current"] != latest:
+            print(newContent)
+            print("didnt update ?")
+            sys.exit(1)
+        content = newContent
         # get all submodules
         # git submodule
         output: str = subprocess.check_output(
