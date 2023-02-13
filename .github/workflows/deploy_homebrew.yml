@@ -13,14 +13,15 @@ jobs:
       - name: Clone homebrew-zvm
         run: git clone https://github.com/gaetschwartz/homebrew-zvm
       - name: Clone zvm
-        run: git clone https://github.com/gaetschwartz/zvm zvm
+        run: git clone https://github.com/gaetschwartz/zvm zvm-repo
       - name: Set up Homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
       - name: Update zvm.rb
         run: |
           brew tap gaetschwartz/zvm
-          python zvm/ci/update_formula.py zvm zvm.rb
+          brew developer on
+          python zvm-repo/ci/update_formula.py zvm zvm.rb
       - name: Commit the changes to zvm.rb
         run: |
           git config user.name github-actions

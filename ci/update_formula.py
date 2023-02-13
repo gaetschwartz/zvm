@@ -81,12 +81,11 @@ def main(forumla: str, overwrite_path: Optional[str] = None):
     latest = data["version"]["latest"]
     if data["version"]["current"] == latest:
         print("No update needed.")
-        return
     print("Updating formula to {}".format(latest))
     # brew formula
     cmd = ["brew", "formula", forumla]
-    formula_path = subprocess.check_output(cmd).strip()
-    print(formula_path)
+    formula_path = subprocess.check_output(cmd, encoding="utf-8").strip()
+    print("Formula path: {}".format(formula_path))
     # read formula
     with open(formula_path, "r") as f:
         content = f.read()
