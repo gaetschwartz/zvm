@@ -30,4 +30,4 @@ jobs:
       - name: Push the changes
         working-directory: scoop-zvm
         run: |
-          git push
+          git push https://token:${{ github.token }}@github.com/gaetschwartz/scoop-zvm.git HEAD:master
