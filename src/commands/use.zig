@@ -16,12 +16,53 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
 
-    const target = ctx.getPositional("target").?;
     const global = ctx.args.hasFlag("global");
     const force = ctx.args.hasFlag("force");
 
     const zvm = try zvmDir(allocator);
+
+    if (ctx.getPositional("target") == null) {
+        var symlink_temp: [std.fs.MAX_PATH_BYTES]u8 = undefined;
+        var symlink_dest: []const u8 = undefined;
+        var location: []const u8 = undefined;
+        if (global) {
+            const global_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "default" });
+            symlink_dest = std.fs.readLinkAbsolute(global_version_path, &symlink_temp) catch |err| switch (err) {
+                error.FileNotFound => {
+                    try stderr.print(
+                        ansi.style("You haven't set a global zig version yet." ++
+                            " Use " ++ ansi.bold("zvm use --global <version>") ++
+                            " to set one up.\n", .red),
+                        .{},
+                    );
+                    return;
+                },
+                else => return err,
+            };
+            location = "globally";
+        } else {
+            const cwd = std.fs.cwd();
+
+            symlink_dest = cwd.readLink(".zvm", &symlink_temp) catch |err| switch (err) {
+                error.FileNotFound => {
+                    try stderr.print(
+                        ansi.style("You haven't set a local zig version yet." ++
+                            " Use " ++ ansi.bold("zvm use <version>") ++
+                            " to set one up.\n", .red),
+                        .{},
+                    );
+                    return;
+                },
+                else => return err,
+            };
+            location = "in this directory";
+        }
+        try stdout.print("Currently using zig at " ++ ansi.bold("{s}") ++ " {s}.\n", .{ symlink_dest, location });
+        return;
+    }
+
     var target_version_path: []const u8 = undefined;
+    const target = ctx.getPositional("target").?;
 
     if (std.mem.eql(u8, target, "git")) {
         const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });

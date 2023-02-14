@@ -16,6 +16,8 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     defer arena.deinit();
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
+    const verbose = ctx.args.hasFlag("verbose");
+    _ = verbose;
 
     const cwd = std.fs.cwd();
     // check if the cwd is a zvm project
@@ -67,6 +69,10 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
         zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig" });
     }
 
+    if (@import("builtin").mode == .Debug) {
+        std.log.debug("Using zig version {s} at {s}...\n", .{ path.basename(zig_dir_path), zig_dir_path });
+    }
+
     var argvs = std.ArrayList([]const u8).init(allocator);
     try argvs.append(zig_path);
     for (ctx.args.raw_args.items) |arg| {
@@ -92,27 +98,23 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
             if (code != 0) {
                 try stdout.print("{s}Command ", .{ansi.c(.RED)});
                 try printArgv(argv, stdout);
-                try stdout.print("exited with code {d}.{s}\n", .{ code, ansi.c(.RESET) });
+                try stdout.print(" exited with code {d}.{s}\n", .{ code, ansi.c(.RESET) });
             }
         },
         .Signal => |signal| {
             // std.log.debug("Command {any} was signaled with {d}\n", .{ term.cmd, signal });
             try stdout.print("{s}Command ", .{ansi.c(.RED)});
             try printArgv(argv, stdout);
-            try stdout.print("was signaled with {d}.{s}\n", .{ signal, ansi.c(.RESET) });
+            try stdout.print(" was signaled with {d}.{s}\n", .{ signal, ansi.c(.RESET) });
         },
         else => {},
     }
 }
 
 inline fn printArgv(argv: [][]const u8, stdout: anytype) !void {
-    var first = true;
-
-    for (argv) |arg| {
-        if (!first) {
-            try stdout.print(" ", .{});
-        }
-        first = false;
-        try stdout.print(ansi.bold("{s}"), .{arg});
+    if (argv.len == 0) return;
+    try stdout.print(ansi.bold("{s}"), .{argv[0]});
+    for (argv[1..]) |arg| {
+        try stdout.print(ansi.bold(" {s}"), .{arg});
     }
 }

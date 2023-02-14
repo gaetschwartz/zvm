@@ -166,6 +166,7 @@ pub fn main() !void {
             .{
                 .name = "target",
                 .description = "the target version to use",
+                .optional = true,
             },
         },
     });
