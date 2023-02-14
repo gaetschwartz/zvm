@@ -16,7 +16,7 @@ pub const ParsedArgs = struct {
     options: std.StringArrayHashMap(Tuple2(Command.Option, []const u8)),
     additional_flags: std.StringArrayHashMap(usize),
     additional_options: std.StringArrayHashMap([]const u8),
-    additional_positionals: std.StringArrayHashMap([]const u8),
+    additional_positionals: std.ArrayList([]const u8),
     raw_args: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
 
@@ -66,7 +66,7 @@ pub const ParsedArgs = struct {
         var options = std.StringArrayHashMap(Tuple2(Command.Option, []const u8)).init(allocator);
         var additional_flags = std.StringArrayHashMap(usize).init(allocator);
         var additional_options = std.StringArrayHashMap([]const u8).init(allocator);
-        var additional_positionals = std.StringArrayHashMap([]const u8).init(allocator);
+        var additional_positionals = std.ArrayList([]const u8).init(allocator);
         var raw_args = std.ArrayList([]const u8).init(allocator);
 
         var current_option: ?Command.Option = null;
@@ -148,7 +148,7 @@ pub const ParsedArgs = struct {
                     try positionals.append(.{ .t1 = positional, .t2 = arg });
                     current_positional_index += 1;
                 } else {
-                    try additional_positionals.put(arg, arg);
+                    try additional_positionals.append(arg);
                 }
             }
         }
@@ -362,11 +362,11 @@ pub const Command = struct {
     pub const CreateCommandOptions = struct {
         name: []const u8,
         description: []const u8,
-        handler: ?*const fn (context: ArgParser.RunContext) anyerror!void,
         flags: []const Flag = &[_]Flag{},
         options: []const Option = &[_]Option{},
         positionals: []const Positional = &[_]Positional{},
         add_help: bool = true,
+        handler: ?*const fn (context: ArgParser.RunContext) anyerror!void,
     };
 
     pub fn addCommand(self: *Command, command: CreateCommandOptions) !*Command {
@@ -397,7 +397,18 @@ pub const Command = struct {
         self.parent = null;
     }
 
+    pub const HelpOtions = struct {
+        show_flags: bool = true,
+        show_options: bool = true,
+        show_usage: bool = true,
+        show_commands: bool = true,
+    };
+
     pub fn printHelp(self: Command, writer: anytype) !void {
+        try self.printHelpWithOptions(writer, .{});
+    }
+
+    pub fn printHelpWithOptions(self: Command, writer: anytype, options: HelpOtions) !void {
         var tree = std.ArrayList([]const u8).init(self.allocator);
         defer tree.deinit();
         var command = &self;
@@ -406,18 +417,20 @@ pub const Command = struct {
             command = parent;
         }
         try writer.print("{s}\n\n", .{self.description});
-        try writer.print("Usage: ", .{});
-        var i: usize = tree.items.len;
-        while (i > 0) : (i -= 1) {
-            try writer.print("{s} ", .{tree.items[i - 1]});
+        if (options.show_usage) {
+            try writer.print("Usage: ", .{});
+            var i: usize = tree.items.len;
+            while (i > 0) : (i -= 1) {
+                try writer.print("{s} ", .{tree.items[i - 1]});
+            }
+            try writer.print("{s} ", .{self.name});
+            for (self.positionals) |positional| {
+                try writer.print("<{s}> ", .{positional.name});
+            }
+            try writer.print("[options]\n\n", .{});
         }
-        try writer.print("{s} ", .{self.name});
-        for (self.positionals) |positional| {
-            try writer.print("<{s}> ", .{positional.name});
-        }
-        try writer.print("[options]\n\n", .{});
 
-        if (self.commands.items.len > 0) {
+        if (options.show_commands and self.commands.items.len > 0) {
             try writer.print("Commands:\n", .{});
             var max_len: usize = 0;
             for (self.commands.items) |c| {
@@ -434,7 +447,7 @@ pub const Command = struct {
             }
         }
 
-        if (self.flags.len > 0) {
+        if (options.show_flags and self.flags.len > 0) {
             var max_len: usize = 2;
             for (self.flags) |flag| {
                 if (flag.long_name) |long_name| {
@@ -464,7 +477,7 @@ pub const Command = struct {
             }
         }
 
-        if (self.options.len > 0) {
+        if (options.show_options and self.options.len > 0) {
             try writer.print("\nOptions:\n", .{});
             for (self.options) |option| {
                 try writer.print("  ", .{});
@@ -577,6 +590,39 @@ test "parsing sample data" {
     });
 
     try parser.run();
+}
+
+pub const HelpCommandCreateOptions = struct {
+    name: []const u8 = "help",
+    description: []const u8 = "Show help",
+};
+
+pub fn help_command(opt: HelpCommandCreateOptions) Command.CreateCommandOptions {
+    return .{
+        .name = opt.name,
+        .description = opt.description,
+        .handler = &help_cmd_impl,
+    };
+}
+
+fn help_cmd_impl(ctx: ArgParser.RunContext) !void {
+    std.log.debug("help command called", .{});
+    var command = ctx.command;
+    while (command.parent) |p| {
+        command = p;
+    }
+    for (ctx.args.raw_args.items[0..]) |command_name| {
+        std.log.debug("command name: {s}", .{command_name});
+        if (std.mem.startsWith(u8, command_name, "-")) {
+            break;
+        }
+        for (command.commands.items) |c| {
+            if (std.mem.eql(u8, c.name, command_name)) {
+                command = c;
+            }
+        }
+    }
+    try command.printHelp(std.io.getStdOut().writer());
 }
 
 test "parsing " {

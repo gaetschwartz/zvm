@@ -1,20 +1,31 @@
 const std = @import("std");
 
 pub const Colors = struct {
-    pub const BLUE_BOLD = "\x1b[1;34m";
-    pub const BLUE = "\x1b[34m";
-    pub const GREEN_BOLD = "\x1b[1;32m";
-    pub const GREEN = "\x1b[32m";
+    pub const BLACK_BOLD = "\x1b[1;30m";
+    pub const BLACK = "\x1b[30m";
     pub const RED_BOLD = "\x1b[1;31m";
     pub const RED = "\x1b[31m";
+    pub const GREEN_BOLD = "\x1b[1;32m";
+    pub const GREEN = "\x1b[32m";
     pub const YELLOW_BOLD = "\x1b[1;33m";
     pub const YELLOW = "\x1b[33m";
-    pub const CYAN_BOLD = "\x1b[1;36m";
-    pub const CYAN = "\x1b[36m";
+    pub const BLUE_BOLD = "\x1b[1;34m";
+    pub const BLUE = "\x1b[34m";
     pub const MAGENTA_BOLD = "\x1b[1;35m";
     pub const MAGENTA = "\x1b[35m";
+    pub const CYAN_BOLD = "\x1b[1;36m";
+    pub const CYAN = "\x1b[36m";
     pub const WHITE_BOLD = "\x1b[1;37m";
     pub const WHITE = "\x1b[37m";
+    pub const LIGHT_BLACK = "\x1b[90m";
+    pub const LIGHT_GRAY = LIGHT_BLACK;
+    pub const LIGHT_RED = "\x1b[91m";
+    pub const LIGHT_GREEN = "\x1b[92m";
+    pub const LIGHT_YELLOW = "\x1b[93m";
+    pub const LIGHT_BLUE = "\x1b[94m";
+    pub const LIGHT_MAGENTA = "\x1b[95m";
+    pub const LIGHT_CYAN = "\x1b[96m";
+    pub const LIGHT_WHITE = "\x1b[97m";
     pub const BOLD = "\x1b[1m";
     pub const FADE = "\x1b[2m";
     pub const RESET = "\x1b[0m";
@@ -33,8 +44,21 @@ pub const Colors = struct {
     pub const UNDERLINE = "\x1b[4m";
     pub const REVERSE = "\x1b[7m";
 };
-pub fn c(comptime color: @TypeOf(.EnumLiteral)) []const u8 {
-    return colorOfEnum(color);
+
+pub fn c(comptime colors: anytype) []const u8 {
+    const type_info = @typeInfo(@TypeOf(colors));
+    switch (type_info) {
+        .Struct => {
+            const fields = comptime type_info.Struct.fields;
+            var temp: []const u8 = "";
+            for (fields) |field| {
+                temp = temp ++ colorOfEnum(@field(colors, field.name));
+            }
+            return temp;
+        },
+        .EnumLiteral => return colorOfEnum(colors),
+        else => @compileError("Invalid type for colors: " ++ @typeName(@TypeOf(colors))),
+    }
 }
 
 fn colorOfEnum(comptime color: @TypeOf(.EnumLiteral)) []const u8 {
@@ -148,4 +172,23 @@ test "all colors can be resolved" {
         _ = c(.UNDERLINE);
         _ = c(.REVERSE);
     }
+}
+
+test "ansi.c(.{...})" {
+    try std.testing.expectEqualSlices(u8, "\x1b[3m\x1b[31m", comptime c(.{ .italic, .red }));
+    try std.testing.expectEqualSlices(u8, "\x1b[31m\x1b[3m", comptime c(.{ .red, .italic }));
+    try std.testing.expectEqualSlices(u8, "\x1b[3m", comptime c(.{.italic}));
+    try std.testing.expectEqualSlices(u8, "", comptime c(.{}));
+}
+
+test "ansi.c(...)" {
+    try std.testing.expectEqualSlices(u8, "\x1b[31m", comptime c(.red));
+    try std.testing.expectEqualSlices(u8, "\x1b[3m", comptime c(.italic));
+}
+
+test "ansi.style(...) == ansi.c(...) ++ text ++ ansi.c(.RESET)" {
+    try std.testing.expectEqualSlices(u8, comptime c(.red) ++ "hello" ++ c(.reset), comptime style("hello", .red));
+    try std.testing.expectEqualSlices(u8, comptime c(.bold) ++ "hello" ++ c(.reset_bold), comptime bold("hello"));
+    try std.testing.expectEqualSlices(u8, comptime c(.fade) ++ "hello" ++ c(.reset_fade), comptime fade("hello"));
+    try std.testing.expectEqualSlices(u8, comptime c(.italic) ++ "hello" ++ c(.reset), comptime italic("hello"));
 }

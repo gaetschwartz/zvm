@@ -44,12 +44,14 @@ pub fn main() !void {
                 .description = "show verbose output",
             },
             .{
-                .name = null,
+                .name = 'R',
                 .long_name = "raw",
                 .description = "show raw version",
             },
         },
     });
+
+    _ = try parser.addCommand(arg_parser.help_command(.{}));
 
     _ = try parser.addCommand(.{
         .name = "install",
@@ -328,7 +330,18 @@ pub fn main() !void {
         }
     }
 
-    try parser.run();
+    parser.run() catch |err| {
+        const stderr = std.io.getStdErr().writer();
+        try stderr.print("Zvm encountered an error while running " ++ ansi.c(.bold), .{});
+        var args = try std.process.argsWithAllocator(std.heap.page_allocator);
+        defer args.deinit();
+        while (args.next()) |arg| {
+            try stderr.print("{s} ", .{arg});
+        }
+        try stderr.print(ansi.c(.reset_bold) ++ ": " ++ ansi.style("{any}\n", .red), .{err});
+
+        std.os.exit(1);
+    };
 }
 
 pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
@@ -336,51 +349,52 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     const verbose = ctx.hasFlag("verbose");
     const raw = ctx.hasFlag("raw");
     const stdout = std.io.getStdOut().writer();
-    var allocator = std.heap.page_allocator;
-    _ = allocator;
 
     const zvmSimple =
-        \\  ______   ___ __ ___  
-        \\ |_  /\ \ / / '_ ` _ \ 
-        \\  / /  \ V /| | | | | |
-        \\ /___|  \_/ |_| |_| |_|
-        \\                       
+        \\     ______   ___ __ ___  
+        \\    |_  /\ \ / / '_ ` _ \ 
+        \\     / /  \ V /| | | | | |
+        \\    /___|  \_/ |_| |_| |_|
+        \\                          
     ;
     const zvmComplex =
-        \\                                       
-        \\  █████████ █████ █████ █████████████  
-        \\ ░█░░░░███ ░░███ ░░███ ░░███░░███░░███ 
-        \\ ░   ███░   ░███  ░███  ░███ ░███ ░███ 
-        \\   ███░   █ ░░███ ███   ░███ ░███ ░███ 
-        \\  █████████  ░░█████    █████░███ █████
-        \\ ░░░░░░░░░    ░░░░░    ░░░░░ ░░░ ░░░░░ 
-        \\                                                                    
+        \\                                          
+        \\     █████████ █████ █████ █████████████  
+        \\    ░█░░░░███ ░░███ ░░███ ░░███░░███░░███ 
+        \\    ░   ███░   ░███  ░███  ░███ ░███ ░███ 
+        \\      ███░   █ ░░███ ███   ░███ ░███ ░███ 
+        \\     █████████  ░░█████    █████░███ █████
+        \\    ░░░░░░░░░    ░░░░░    ░░░░░ ░░░ ░░░░░ 
+        \\                                                                       
     ;
 
-    try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windowsHasChcp65001()) zvmComplex else zvmSimple});
+    if (!raw)
+        try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windowsHasChcp65001()) zvmComplex else zvmSimple});
 
     if (version) {
         if (raw) {
             try stdout.print("{s}\n", .{build_options.version});
             return;
         }
-        const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.BLUE) ++ ansi.c(.BOLD);
+        const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.blue) ++ ansi.c(.BOLD);
         const end = comptime ansi.c(.reset) ++ "\n";
         const rstBold = comptime ansi.c(.reset_bold);
-        try stdout.print(start ++ " version          " ++ rstBold ++ (build_options.version) ++ end, .{});
-        try stdout.print(start ++ " commit_hash  " ++ rstBold ++ (build_options.git_commit orelse "unknown") ++ end, .{});
-        try stdout.print(start ++ " build_date   " ++ rstBold ++ (build_options.build_date orelse "unknown") ++ end, .{});
-        // branch
-        try stdout.print(start ++ " branch       " ++ rstBold ++ (build_options.git_branch orelse "unknown") ++ end, .{});
-        try stdout.print(start ++ " zig          " ++ rstBold ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end, .{});
-        try stdout.print(start ++ " target       " ++ rstBold ++ std.fmt.comptimePrint("{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) }) ++ end, .{});
+        _ = try stdout.write(start ++ " version      " ++ rstBold ++ (build_options.version) ++ end);
+        _ = try stdout.write(start ++ " commit_hash  " ++ rstBold ++ (build_options.git_commit orelse "unknown") ++ end);
+        _ = try stdout.write(start ++ " build_date   " ++ rstBold ++ (build_options.build_date orelse "unknown") ++ end);
+        _ = try stdout.write(start ++ " branch       " ++ rstBold ++ (build_options.git_branch orelse "unknown") ++ end);
+        _ = try stdout.write(start ++ " zig          " ++ rstBold ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end);
+        _ = try stdout.write(start ++ " target       " ++ rstBold ++ std.fmt.comptimePrint("{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) }) ++ end);
 
         if (verbose) {
-            try stdout.print(start ++ " is_ci        " ++ rstBold ++ (build_options.is_ci) ++ end, .{});
+            _ = try stdout.write(start ++ " is_ci        " ++ rstBold ++ (build_options.is_ci) ++ end);
         }
         return;
     }
-    try ctx.command.printHelp(std.io.getStdOut().writer());
+    try ctx.command.printHelpWithOptions(std.io.getStdOut().writer(), .{
+        .show_flags = false,
+        .show_options = false,
+    });
 }
 
 fn setConsoleToUtf8() !void {
