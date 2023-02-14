@@ -320,6 +320,14 @@ pub fn main() !void {
         },
     });
 
+    if (builtin.os.tag == .windows) {
+        if (std.os.windows.kernel32.SetConsoleOutputCP(65001) != 0) {
+            std.log.debug("Set console output code page to UTF-8", .{});
+        } else {
+            std.log.debug("Failed to set console output code page to UTF-8", .{});
+        }
+    }
+
     try parser.run();
 }
 
@@ -327,9 +335,31 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     const version = ctx.hasFlag("version");
     const verbose = ctx.hasFlag("verbose");
     const raw = ctx.hasFlag("raw");
+    const stdout = std.io.getStdOut().writer();
+    var allocator = std.heap.page_allocator;
+    _ = allocator;
+
+    const zvmSimple =
+        \\  ______   ___ __ ___  
+        \\ |_  /\ \ / / '_ ` _ \ 
+        \\  / /  \ V /| | | | | |
+        \\ /___|  \_/ |_| |_| |_|
+        \\                       
+    ;
+    const zvmComplex =
+        \\                                       
+        \\  █████████ █████ █████ █████████████  
+        \\ ░█░░░░███ ░░███ ░░███ ░░███░░███░░███ 
+        \\ ░   ███░   ░███  ░███  ░███ ░███ ░███ 
+        \\   ███░   █ ░░███ ███   ░███ ░███ ░███ 
+        \\  █████████  ░░█████    █████░███ █████
+        \\ ░░░░░░░░░    ░░░░░    ░░░░░ ░░░ ░░░░░ 
+        \\                                                                    
+    ;
+
+    try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windowsHasChcp65001()) zvmComplex else zvmSimple});
 
     if (version) {
-        const stdout = std.io.getStdOut().writer();
         if (raw) {
             try stdout.print("{s}\n", .{build_options.version});
             return;
@@ -351,4 +381,14 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         return;
     }
     try ctx.command.printHelp(std.io.getStdOut().writer());
+}
+
+fn setConsoleToUtf8() !void {
+    try std.os.windows.SetConsoleTextAttribute(try std.os.windows.GetStdHandle(std.os.windows.STD_OUTPUT_HANDLE), 0x0007);
+}
+
+inline fn windowsHasChcp65001() bool {
+    const chcp = std.os.windows.kernel32.GetConsoleOutputCP();
+    std.log.debug("chcp: {d}", .{chcp});
+    return chcp == 65001;
 }
