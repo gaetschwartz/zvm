@@ -1,5 +1,6 @@
 const std = @import("std");
 
+/// Colors for the terminal.
 pub const Colors = struct {
     pub const BLACK_BOLD = "\x1b[1;30m";
     pub const BLACK = "\x1b[30m";
@@ -44,7 +45,7 @@ pub const Colors = struct {
     pub const UNDERLINE = "\x1b[4m";
     pub const REVERSE = "\x1b[7m";
 };
-
+/// Accepts an enum literal representing a color or a struct with enum literals as fields.
 pub fn c(comptime colors: anytype) []const u8 {
     const type_info = @typeInfo(@TypeOf(colors));
     switch (type_info) {
@@ -73,6 +74,8 @@ fn colorOfEnum(comptime color: @TypeOf(.EnumLiteral)) []const u8 {
     @compileError("Invalid color: " ++ tagName);
 }
 
+/// Accepts an enum literal representing a color or a struct with enum literals as fields.
+/// The text will be colored with the given colors.
 pub fn style(comptime text: []const u8, comptime colors: anytype) []const u8 {
     const type_info = @typeInfo(@TypeOf(colors));
     switch (type_info) {
@@ -91,18 +94,22 @@ pub fn style(comptime text: []const u8, comptime colors: anytype) []const u8 {
     }
 }
 
+/// Make the text fade.
 pub fn fade(comptime text: []const u8) []const u8 {
     return c(.FADE) ++ text ++ c(.RESET_FADE);
 }
 
+/// Make the text bold.
 pub fn bold(comptime text: []const u8) []const u8 {
     return c(.BOLD) ++ text ++ c(.RESET_BOLD);
 }
 
+/// Make the text italic.
 pub fn italic(comptime text: []const u8) []const u8 {
     return c(.ITALIC) ++ text ++ c(.RESET);
 }
 
+/// Make the text blink.
 pub fn blink(comptime text: []const u8) []const u8 {
     return c(.BLINK) ++ text ++ c(.RESET);
 }

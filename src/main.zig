@@ -397,10 +397,6 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     });
 }
 
-fn setConsoleToUtf8() !void {
-    try std.os.windows.SetConsoleTextAttribute(try std.os.windows.GetStdHandle(std.os.windows.STD_OUTPUT_HANDLE), 0x0007);
-}
-
 inline fn windowsHasChcp65001() bool {
     const chcp = std.os.windows.kernel32.GetConsoleOutputCP();
     std.log.debug("chcp: {d}", .{chcp});
