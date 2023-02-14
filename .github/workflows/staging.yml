@@ -58,7 +58,7 @@ jobs:
           git config --local user.name 'ZVM Bot'
           git config --local user.email 'blaxoujunior@gmail.com'
           chmod +x artifacts/zvm-x86_64-linux/zvm-x86_64-linux
-          version=$(artifacts/zvm-x86_64-linux/zvm-x86_64-linux --version --raw)
+          version=$(artifacts/zvm-x86_64-linux/zvm-x86_64-linux --raw-version)
           # set outputs
           echo "version=$version" >> $GITHUB_OUTPUT
         id: git-version

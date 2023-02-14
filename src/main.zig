@@ -44,8 +44,8 @@ pub fn main() !void {
                 .description = "show verbose output",
             },
             .{
-                .name = 'R',
-                .long_name = "raw",
+                .name = null,
+                .long_name = "raw-version",
                 .description = "show raw version",
             },
         },
@@ -347,8 +347,13 @@ pub fn main() !void {
 pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     const version = ctx.hasFlag("version");
     const verbose = ctx.hasFlag("verbose");
-    const raw = ctx.hasFlag("raw");
+    const raw_version = ctx.hasFlag("raw-version");
     const stdout = std.io.getStdOut().writer();
+
+    if (raw_version) {
+        try stdout.print("{s}\n", .{build_options.version});
+        return;
+    }
 
     const zvmSimple =
         \\     ______   ___ __ ___  
@@ -368,14 +373,9 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         \\                                                                       
     ;
 
-    if (!raw)
-        try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windowsHasChcp65001()) zvmComplex else zvmSimple});
+    try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windowsHasChcp65001()) zvmComplex else zvmSimple});
 
     if (version) {
-        if (raw) {
-            try stdout.print("{s}\n", .{build_options.version});
-            return;
-        }
         const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.blue) ++ ansi.c(.BOLD);
         const end = comptime ansi.c(.reset) ++ "\n";
         const rstBold = comptime ansi.c(.reset_bold);
