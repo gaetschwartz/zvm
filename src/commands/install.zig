@@ -129,7 +129,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     } else {
         try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "... ", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
 
-        try fetchArchiveChildProcess(.{
+        try fetchArchiveZig(.{
             .url = archive.tarball,
             .path = cache_path,
             .allocator = allocator,
@@ -332,21 +332,14 @@ fn unarchiveTarXz(path: []const u8, dest: []const u8, allocator: std.mem.Allocat
 }
 
 pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
-    const total_human = utils.humanSize(@intCast(i64, args.total_size));
+    // const total_human = utils.humanSize(@intCast(i64, args.total_size));
+    // _ = total_human;
+    std.log.debug("fetching archive: {s} ({d} bytes)\n", .{ args.url, args.total_size });
+    const stdout = std.io.getStdOut().writer();
+    var alloc = std.heap.page_allocator;
 
     // check if the file exists
-    var file: std.fs.File = blk: {
-        break :blk std.fs.openFileAbsolute(args.path, .{ .mode = .read_write }) catch |err| {
-            std.log.debug("error: {any}\n", .{err});
-            if (err == error.FileNotFound) {
-                // create the file
-                std.log.debug("creating file: {s}\n", .{args.path});
-                break :blk try std.fs.createFileAbsolute(args.path, .{});
-            } else {
-                return err;
-            }
-        };
-    };
+    var file: std.fs.File = try std.fs.createFileAbsolute(args.path, .{});
     defer file.close();
     var writer = file.writer();
 
@@ -357,24 +350,47 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     var req = try client.request(uri, .{}, .{});
 
     var total_read: usize = 0;
-    var temp_buffer = [_]u8{0} ** 1024;
+    var temp_buffer = [_]u8{0} ** (1024 * 1024 * 16); // 16MB buffer
     // current time
+    const window = blk: {
+        break :blk utils.getTerminalWindow() catch |err| {
+            std.log.err("could not get terminal window: {any}", .{err});
+            break :blk utils.TerminalWindow{
+                .width = 80,
+                .height = 24,
+            };
+        };
+    };
+    const width = window.width;
     var now = std.time.milliTimestamp();
     while (true) {
         const read: usize = try req.read(&temp_buffer);
         total_read += read;
 
-        const percent = (total_read * 100) / args.total_size;
+        const progress = @intToFloat(f32, total_read) / @intToFloat(f32, args.total_size);
         const elapsed = std.time.milliTimestamp() - now;
-        const rate = @divTrunc((@intCast(i64, total_read)), elapsed);
+        const rate = @divTrunc((@intCast(i64, total_read * 1000)), elapsed);
         const human = utils.humanSize(rate);
-        const read_human = utils.humanSize(@intCast(i64, total_read));
-        std.log.debug("\r{d} {s} / {d} {s} ({d}%) {d} {s}/s", .{ read_human.value, read_human.unit, total_human.value, total_human.unit, percent, human.value, human.unit });
+        // const read_human = utils.humanSize(@intCast(i64, total_read));
+        // _ = read_human;
+        // progress bar
+        const bar_width = width - 20;
+        const filled = @floatToInt(usize, @intToFloat(f32, bar_width) * progress);
+        var bar = try alloc.alloc(u8, bar_width);
+        defer alloc.free(bar);
+        for (bar[0..filled]) |*c| {
+            c.* = '=';
+        }
+        bar[filled] = '>';
+        for (bar[filled + 1 ..]) |*c| {
+            c.* = ' ';
+        }
+        try stdout.print("\r[{s}] {d} {s}/s", .{ bar[0..], human.value, human.unit });
         if (read == 0) break;
         _ = try writer.write(temp_buffer[0..read]);
     }
     try file.sync();
-    std.log.debug("\nSuccessfully downloaded {s} to {s} ({d} bytes)\n", .{ args.url, args.path, total_read });
+    std.log.debug("Successfully downloaded {s} to {s} ({d} bytes)\n", .{ args.url, args.path, total_read });
 }
 
 inline fn printArgv(argv: [][]const u8) void {

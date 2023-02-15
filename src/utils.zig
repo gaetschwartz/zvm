@@ -70,7 +70,7 @@ const HumanSize = struct {
     unit: []const u8,
 };
 
-fn humanSize(size: i64) HumanSize {
+pub fn humanSize(size: i64) HumanSize {
     const KB = 1024;
     const MB = KB * 1024;
     const GB = MB * 1024;
@@ -136,4 +136,47 @@ pub fn shasum(reader: std.fs.File.Reader, out_buffer: *[digest_length * 2]u8) !v
     // to hex
     var stream = std.io.fixedBufferStream(out_buffer[0..]);
     try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("", .{}, stream.writer());
+}
+
+pub const TerminalWindow = struct {
+    width: u16,
+    height: u16,
+};
+
+pub const winsize = extern struct {
+    ws_row: u16,
+    ws_col: u16,
+    ws_xpixel: u16,
+    ws_ypixel: u16,
+};
+
+pub fn getTerminalWindow() !TerminalWindow {
+    std.log.debug("getTerminalWindow\n", .{});
+    switch (builtin.os.tag) {
+        .linux, .macos, .ios, .watchos, .tvos => {
+            var size: winsize = undefined;
+            try std.c.ioctl(std.os.STDOUT_FILENO, std.os.linux.TIOCGWINSZ, &size);
+            return TerminalWindow{
+                .width = winsize.ws_col,
+                .height = winsize.ws_row,
+            };
+        },
+        .windows => {
+            return error.UnsupportedOS;
+            // var info: std.os.windows.CONSOLE_SCREEN_BUFFER_INFO = undefined;
+            // var handle = try std.os.windows.GetStdHandle(std.os.windows.STD_OUTPUT_HANDLE);
+            // defer std.os.windows.CloseHandle(handle);
+            // const res = std.os.windows.kernel32.GetConsoleScreenBufferInfo(handle, &info);
+            // if (res == 0) {
+            //     return error.GetConsoleScreenBufferInfoFailed;
+            // }
+            // return TerminalWindow{
+            //     .width = @intCast(u16, info.dwSize.X),
+            //     .height = @intCast(u16, info.dwSize.Y),
+            // };
+        },
+        else => {
+            return error.UnsupportedOS;
+        },
+    }
 }
