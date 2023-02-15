@@ -35,15 +35,16 @@ pub fn fetchIndex(allocator: std.mem.Allocator) anyerror!Index {
     var client = http.Client{
         .allocator = allocator,
     };
+    defer client.deinit();
     var uri = try std.Uri.parse("https://ziglang.org/download/index.json");
     var req = try client.request(uri, .{}, .{});
-
+    defer req.deinit();
 
     // 500 kb
     const BUFFER_SIZE = 500 * 1024;
     var buffer: [BUFFER_SIZE]u8 = undefined;
     const total_read = try req.readAll(&buffer);
-        
+
     std.log.debug("total read: {d}\n", .{total_read});
 
     // var token_stream = std.json.TokenStream.init(array.items[0..total_read]);

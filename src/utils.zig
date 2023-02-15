@@ -8,6 +8,7 @@ pub fn zvmDir(allocator: std.mem.Allocator) ![]const u8 {
         std.log.err(" could not find home directory\n", .{});
         return error.CouldNotFindHomeDirectory;
     };
+    defer allocator.free(home);
     std.log.debug("home: {s}", .{home});
     return try std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm" });
 }

@@ -431,3 +431,34 @@ fn request(client: *http.Client, uri: std.Uri, headers: http.Client.Request.Head
 
     return req;
 }
+
+pub fn IndexCompleter(comptime doShowVerions: bool) type {
+    return struct {
+        const Self = @This();
+
+        pub fn complete(word: []const u8) !void {
+            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+            defer _ = gpa.deinit();
+            const allocator = gpa.allocator();
+            const stdout = std.io.getStdOut().writer();
+
+            var index = try idx.fetchIndex(allocator);
+            defer index.deinit();
+
+            var channels = std.StringHashMap(bool).init(allocator);
+            defer channels.deinit();
+
+            for (index.releases.items) |release| {
+                if (doShowVerions) {
+                    if (mem.startsWith(u8, release.version, word)) {
+                        try stdout.print("{s} ", .{release.version});
+                    }
+                }
+                if (mem.startsWith(u8, release.channel, word) and !channels.contains(release.channel)) {
+                    try stdout.print("{s} ", .{release.channel});
+                    try channels.put(release.channel, true);
+                }
+            }
+        }
+    };
+}

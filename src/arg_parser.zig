@@ -210,24 +210,22 @@ pub const ArgParser = struct {
     args: std.ArrayList([]const u8),
     root_command: ?Command = null,
 
-    pub fn init(allocator: std.mem.Allocator, iter: *std.process.ArgIterator) !ArgParser {
+    pub fn init(allocator: std.mem.Allocator) !ArgParser {
         var args = std.ArrayList([]const u8).init(allocator);
-        while (iter.next()) |arg| {
-            try args.append(arg);
-        }
         return .{
             .allocator = allocator,
             .args = args,
         };
     }
 
-    pub fn initWithArgs(allocator: std.mem.Allocator, arguments: []const []const u8) !ArgParser {
-        var args = std.ArrayList([]const u8).init(allocator);
-        try args.appendSlice(arguments);
-        return .{
-            .allocator = allocator,
-            .args = args,
-        };
+    pub fn parse(self: *ArgParser, iter: *std.process.ArgIterator) !void {
+        while (iter.next()) |arg| {
+            try self.args.append(arg);
+        }
+    }
+
+    pub fn parseArgs(self: *ArgParser, args: []const []const u8) !void {
+        try self.args.appendSlice(args);
     }
 
     pub fn setRootCommand(self: *ArgParser, command: Command.CreateCommandOptions) void {
@@ -358,7 +356,9 @@ pub const Command = struct {
     allocator: std.mem.Allocator,
     parent: ?*Command = null,
     add_help: bool = true,
+    hidden: bool = false,
 
+    pub const PositionalCompleter = *const fn (word: []const u8) anyerror!void;
     pub const CreateCommandOptions = struct {
         name: []const u8,
         description: []const u8,
@@ -367,6 +367,7 @@ pub const Command = struct {
         positionals: []const Positional = &[_]Positional{},
         add_help: bool = true,
         handler: ?*const fn (context: ArgParser.RunContext) anyerror!void,
+        hidden: bool = false,
     };
 
     pub fn addCommand(self: *Command, command: CreateCommandOptions) !*Command {
@@ -381,6 +382,7 @@ pub const Command = struct {
             .allocator = self.allocator,
             .parent = self,
             .add_help = command.add_help,
+            .hidden = command.hidden,
         };
         const cmd_ptr: *Command = try self.allocator.create(Command);
         cmd_ptr.* = cmd;
@@ -434,6 +436,7 @@ pub const Command = struct {
             try writer.print("Commands:\n", .{});
             var max_len: usize = 0;
             for (self.commands.items) |c| {
+                if (c.hidden) continue;
                 if (c.name.len > max_len) {
                     max_len = c.name.len;
                 }
@@ -442,6 +445,7 @@ pub const Command = struct {
             defer self.allocator.free(buf);
             std.mem.set(u8, buf, ' ');
             for (self.commands.items) |c| {
+                if (c.hidden) continue;
                 const spaces = buf[0 .. max_len - c.name.len];
                 try writer.print("  {s}{s}    {s}\n", .{ c.name, spaces, c.description });
             }
@@ -515,6 +519,7 @@ pub const Command = struct {
         name: []const u8,
         description: []const u8 = "",
         optional: bool = false,
+        completer: ?PositionalCompleter = null,
     };
 };
 

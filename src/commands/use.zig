@@ -164,3 +164,34 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
         try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " in this directory.\n", .green), .{target});
     }
 }
+pub fn version_complete(word: []const u8) !void {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var allocator = gpa.allocator();
+    defer _ = gpa.deinit();
+
+    const stdout = std.io.getStdOut().writer();
+
+    const zvm = try zvmDir(allocator);
+    defer allocator.free(zvm);
+
+    const versions_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions" });
+    defer allocator.free(versions_path);
+
+    var dir = try std.fs.openIterableDirAbsolute(versions_path, .{});
+    defer dir.close();
+    var iter = dir.iterate();
+
+    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    if (cfg.git_dir_path) |_| {
+        try stdout.print("git ", .{});
+    }
+    defer config.freeConfig(allocator, cfg);
+
+    while (try iter.next()) |entry| {
+        if (entry.kind == .Directory) {
+            if (std.mem.startsWith(u8, entry.name, word)) {
+                try stdout.print("{s} ", .{entry.name});
+            }
+        }
+    }
+}

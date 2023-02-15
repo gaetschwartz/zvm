@@ -56,7 +56,7 @@ pub fn build(b: *std.Build) void {
     zvm.addOptions("zvm_build_options", options);
     zvm.install();
 
-    const run_cmd = zvm.run();
+    const run_cmd = b.addRunArtifact(zvm);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
@@ -64,6 +64,34 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const completion_cmd = b.addExecutable(.{
+        .name = "complete",
+        .root_source_file = .{ .path = "src/complete.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    completion_cmd.addModule("ansi", ansi);
+    completion_cmd.addModule("known-folders", knownFolders);
+    completion_cmd.addOptions("zvm_build_options", options);
+    completion_cmd.install();
+
+    const install_completions = b.addExecutable(.{
+        .name = "install-completions",
+        .root_source_file = .{ .path = "src/completions_install.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+    install_completions.addModule("ansi", ansi);
+    install_completions.addModule("known-folders", knownFolders);
+    install_completions.addOptions("zvm_build_options", options);
+    install_completions.install();
+
+    const install_completions_run = b.addRunArtifact(install_completions);
+    install_completions_run.step.dependOn(b.getInstallStep());
+
+    const install_completions_step = b.step("install-completions", "Install completions");
+    install_completions_step.dependOn(&install_completions_run.step);
 
     const test_step = b.step("test", "Run unit tests");
     const arg_parser_test = registerTest(b, test_step, .{

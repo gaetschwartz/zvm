@@ -122,6 +122,8 @@ const Context = struct {
 pub fn readConfig(context: Context) !ZvmConfig {
     const zvm = context.zvm_path;
     const config_path = try std.fs.path.join(context.allocator, &[_][]const u8{ zvm, "config.json" });
+    defer context.allocator.free(config_path);
+
     const file = std.fs.openFileAbsolute(config_path, .{}) catch |err| switch (err) {
         error.FileNotFound => return ZvmConfig.default,
         else => return err,
@@ -160,4 +162,15 @@ pub fn writeConfig(context: Context, config: ZvmConfig) !void {
         .{},
         file.writer(),
     );
+}
+
+pub fn complete_config_keys(word: []const u8) !void {
+    const stdout = std.io.getStdOut().writer();
+
+    const typeInfo = @typeInfo(ZvmConfig);
+    inline for (typeInfo.Struct.fields) |field| {
+        if (std.mem.startsWith(u8, field.name, word)) {
+            try stdout.print("{s} ", .{field.name});
+        }
+    }
 }
