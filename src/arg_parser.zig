@@ -210,7 +210,7 @@ pub const ArgParser = struct {
     args: std.ArrayList([]const u8),
     root_command: ?Command = null,
 
-    pub fn init(allocator: std.mem.Allocator) !ArgParser {
+    pub fn init(allocator: std.mem.Allocator) ArgParser {
         var args = std.ArrayList([]const u8).init(allocator);
         return .{
             .allocator = allocator,
@@ -546,8 +546,9 @@ test "parsing sample data" {
         "--long",
         "-p=short",
     };
-    var parser = try ArgParser.initWithArgs(allocator, argv);
+    var parser = ArgParser.init(allocator);
     defer parser.deinit();
+    try parser.parseArgs(argv);
 
     parser.setRootCommand(.{
         .name = "root",
@@ -640,8 +641,9 @@ test "parsing " {
         "--long",
         "-p=short",
     };
-    var parser = try ArgParser.initWithArgs(allocator, argv);
+    var parser = ArgParser.init(allocator);
     defer parser.deinit();
+    try parser.parseArgs(argv);
 
     parser.setRootCommand(.{
         .name = "root",

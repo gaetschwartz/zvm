@@ -25,7 +25,7 @@ const ansi = @import("ansi");
 const complete = @import("complete.zig").main;
 
 pub fn createParser(allocator: std.mem.Allocator) !ArgParser {
-    var parser = try ArgParser.init(allocator);
+    var parser = ArgParser.init(allocator);
 
     parser.setRootCommand(.{
         .name = "zvm",
