@@ -1,6 +1,6 @@
 ![Ci badge](https://github.com/gaetschwartz/zvm/actions/workflows/master.yml/badge.svg)
 
-Zig Version Manager (zvm) is a simple yet powerfulto manage multiple versions of the Zig programming language.
+Zig Version Manager (zvm) is a simple yet powerful tool to manage multiple versions of the Zig programming language.
 
 ## Installation
 
