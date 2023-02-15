@@ -1,2 +1,3 @@
-#!/usr/bin/env zsh
+#compdef zvm
+
 complete -C "zvm completions" zvm
