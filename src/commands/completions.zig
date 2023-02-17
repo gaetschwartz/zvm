@@ -9,18 +9,23 @@ const ansi = @import("ansi");
 const config = @import("config.zig");
 
 pub fn gen_completions_cmd(ctx: ArgParser.RunContext) !void {
+    const shell = ctx.getOption("shell").?;
+    if (std.mem.eql(u8, shell, "zsh")) {
+        try zvm_completions(ctx);
+    } else if (std.mem.eql(u8, shell, "powershell")) {
+        try powershell_completions(ctx);
+    } else {
+        std.debug.panic("Shell not supported: {s}", .{shell});
+    }
+}
+
+fn zvm_completions(ctx: ArgParser.RunContext) !void {
     const stdout = std.io.getStdOut().writer();
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
     var allocator = arena.allocator();
-    defer arena.deinit();
-    const shell = ctx.getOption("shell");
-    if (shell) |s| {
-        std.log.debug("shell: {s}", .{s});
-    } else {
-        std.log.debug("no shell", .{});
-    }
 
+    defer arena.deinit();
     var root = ctx.command;
     while (root.parent) |parent| {
         root = parent;
@@ -295,4 +300,11 @@ fn writePositinalCompleters(allocator: std.mem.Allocator, cmd: *Command, stdout:
         if (c.hidden) continue;
         try writePositinalCompleters(allocator, c, stdout);
     }
+}
+
+fn powershell_completions(ctx: ArgParser.RunContext) !void {
+    _ = ctx;
+    const stdout = std.io.getStdOut().writer();
+
+    _ = try stdout.write(@embedFile("../scripts/completions.ps1"));
 }

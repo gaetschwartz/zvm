@@ -132,6 +132,14 @@ pub inline fn createParser(allocator: std.mem.Allocator) !ArgParser {
         .description = "Generate shell completions",
         .handler = &gen_completions_cmd,
         .hidden = true,
+        .options = &[_]Command.Option{
+            .{
+                .name = 's',
+                .long_name = "shell",
+                .description = "the shell to generate completions for",
+                .default_value = "zsh",
+            },
+        },
     });
     _ = try parser.addCommand(.{
         .name = "spawn",
