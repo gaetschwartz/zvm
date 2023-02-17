@@ -4,14 +4,15 @@ Zig Version Manager (`zvm`) is a simple yet powerful tool to manage multiple ver
 
 ## 📚 Table of Contents
 
-- [✨ Features](#✨-features)
-- [📥 Installation](#📥-installation)
-  - [🍺 Homebrew](#🍺-homebrew)
-  - [🍨 Scoop](#🍨-scoop)
-  - [⚙️ Manually](#⚙️-manually)
-- [📝 Differences with other Zig version managers](#📝-differences-with-other-zig-version-managers)
+- [✨ Features](#-features)
+- [📥 Installation](#-installation)
+  - [🍺 Homebrew](#-homebrew)
+  - [🍨 Scoop](#-scoop)
+  - [⚙️ Manually](#%EF%B8%8F-manually)
+- [🧠 Auto-completion](#-auto-completion)
+- [📝 Differences with other Zig version managers](#-differences-with-other-zig-version-managers)
   - [Zigup](#zigup)
-- [🫂 Contributing](#🫂-contributing)
+- [🫂 Contributing](#-contributing)
 
 ## ✨ Features
 
@@ -72,6 +73,19 @@ This can be done by running `scoop install 7zip`.*
 Choose your platform and download the latest release [here](https://github.com/gaetschwartz/zvm/releases/latest).
 
 Add the binary to your path.
+
+## 🧠 Auto-completion
+
+Auto-completion is available for `zsh` and `powershell`. It is installed automatically when using the Homebrew.
+
+### Powershell
+
+Add this to your $PROFILE to enable auto-completion for powershell.
+
+```powershell
+Invoke-Expression ((zvm completions --shell=powershell) -join "`n")
+```
+
 ## 📝 Differences with other Zig version managers
 
 ### Zigup
