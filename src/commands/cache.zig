@@ -23,18 +23,7 @@ pub fn cache_clear_cmd(ctx: ArgParser.RunContext) !void {
 
     const zvm = try zvmDir(allocator);
     const cache = try path.join(allocator, &[_][]const u8{ zvm, "cache" });
-
-    const argv = switch (builtin.os.tag) {
-        .windows => &[_][]const u8{ "powershell", "-Command", "Remove-Item", "-Recurse", "-Force", cache },
-        else => &[_][]const u8{ "rm", "-rf", cache },
-    };
-    const res = try std.ChildProcess.exec(.{
-        .argv = argv,
-        .allocator = allocator,
-    });
-    handleResult(res.term, argv) catch {
-        return;
-    };
+    try std.fs.deleteTreeAbsolute(cache);
 }
 
 pub fn cache_size_cmd(ctx: ArgParser.RunContext) !void {
