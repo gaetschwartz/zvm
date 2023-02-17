@@ -159,19 +159,19 @@ pub fn install_cmd(ctx: RunContext) !void {
     const archive_folder = utils.stripExtension(filename, archive_type);
     const archive_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_versions, archive_folder });
     std.log.debug("archive path: {s}", .{archive_path});
-    // try std.fs.renameAbsolute(archive_path, version_path);
-    const argv = switch (builtin.os.tag) {
-        .windows => &[_][]const u8{ "powershell", "-Command", "Rename-Item", archive_path, version_path, "-Force" },
-        else => &[_][]const u8{ "mv", archive_path, version_path },
-    };
-    const res = try std.ChildProcess.exec(.{
-        .argv = argv,
-        .allocator = allocator,
-    });
-    handleResult(res.term, argv) catch |err| {
-        std.log.err("could not rename archive: {any}", .{err});
-        return;
-    };
+    try std.fs.renameAbsolute(archive_path, version_path);
+    // const argv = switch (builtin.os.tag) {
+    //     .windows => &[_][]const u8{ "powershell", "-Command", "Rename-Item", archive_path, version_path, "-Force" },
+    //     else => &[_][]const u8{ "mv", archive_path, version_path },
+    // };
+    // const res = try std.ChildProcess.exec(.{
+    //     .argv = argv,
+    //     .allocator = allocator,
+    // });
+    // handleResult(res.term, argv) catch |err| {
+    //     std.log.err("could not rename archive: {any}", .{err});
+    //     return;
+    // };
     std.log.debug("renamed {s} to {s}\n", .{ archive_path, version_path });
 
     // write the version file
