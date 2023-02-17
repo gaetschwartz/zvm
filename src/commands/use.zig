@@ -164,12 +164,12 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
         try stdout.print(ansi.style("Now using zig version " ++ ansi.bold("{s}") ++ " in this directory.\n", .green), .{target});
     }
 }
-pub fn version_complete(word: []const u8) !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var allocator = gpa.allocator();
-    defer _ = gpa.deinit();
+pub fn version_complete(ctx: Command.CompletionContext) !std.ArrayList(Command.Completion) {
+    var allocator = ctx.allocator;
+    var completions = std.ArrayList(Command.Completion).init(allocator);
 
     const stdout = std.io.getStdOut().writer();
+    _ = stdout;
 
     const zvm = try zvmDir(allocator);
     defer allocator.free(zvm);
@@ -183,15 +183,18 @@ pub fn version_complete(word: []const u8) !void {
 
     const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
     if (cfg.git_dir_path) |_| {
-        try stdout.print("git ", .{});
+        try completions.append(Command.Completion{
+            .name = "git",
+        });
     }
     defer config.freeConfig(allocator, cfg);
 
     while (try iter.next()) |entry| {
         if (entry.kind == .Directory) {
-            if (std.mem.startsWith(u8, entry.name, word)) {
-                try stdout.print("{s} ", .{entry.name});
-            }
+            try completions.append(Command.Completion{
+                .name = entry.name,
+            });
         }
     }
+    return completions;
 }

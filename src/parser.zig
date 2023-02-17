@@ -14,6 +14,7 @@ const zig_cmd = @import("commands/zig.zig").zig_cmd;
 const releases_cmd = @import("commands/releases.zig").releases_cmd;
 const destroy_cmd = @import("commands/destroy.zig").destroy_cmd;
 const config_cmd = @import("commands/config.zig").config_cmd;
+const gen_completions_cmd = @import("commands/completions.zig").gen_completions_cmd;
 const complete_config_keys = @import("commands/config.zig").complete_config_keys;
 const zvm_cmd = @import("main.zig").zvm_cmd;
 const zvmDir = @import("utils.zig").zvmDir;
@@ -24,7 +25,8 @@ const builtin = @import("builtin");
 const ansi = @import("ansi");
 const complete = @import("complete.zig").main;
 
-pub fn createParser(allocator: std.mem.Allocator) !ArgParser {
+// Needs to be inline so that it doesn't release the created commands
+pub inline fn createParser(allocator: std.mem.Allocator) !ArgParser {
     var parser = ArgParser.init(allocator);
 
     parser.setRootCommand(.{
@@ -120,9 +122,15 @@ pub fn createParser(allocator: std.mem.Allocator) !ArgParser {
         .handler = &destroy_cmd,
     });
     _ = try parser.addCommand(.{
-        .name = "completions",
-        .description = "Completions for zvm",
+        .name = "complete",
+        .description = "Complete a command",
         .handler = &complete_cmd,
+        .hidden = true,
+    });
+    _ = try parser.addCommand(.{
+        .name = "completions",
+        .description = "Generate shell completions",
+        .handler = &gen_completions_cmd,
         .hidden = true,
     });
     _ = try parser.addCommand(.{

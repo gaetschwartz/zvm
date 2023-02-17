@@ -76,23 +76,6 @@ pub fn build(b: *std.Build) void {
     completion_cmd.addOptions("zvm_build_options", options);
     completion_cmd.install();
 
-    const install_completions = b.addExecutable(.{
-        .name = "install-completions",
-        .root_source_file = .{ .path = "src/completions_install.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    install_completions.addModule("ansi", ansi);
-    install_completions.addModule("known-folders", knownFolders);
-    install_completions.addOptions("zvm_build_options", options);
-    install_completions.install();
-
-    const install_completions_run = b.addRunArtifact(install_completions);
-    install_completions_run.step.dependOn(b.getInstallStep());
-
-    const install_completions_step = b.step("install-completions", "Install completions");
-    install_completions_step.dependOn(&install_completions_run.step);
-
     const test_step = b.step("test", "Run unit tests");
     const arg_parser_test = registerTest(b, test_step, .{
         .root_source_file = .{ .path = "src/arg_parser.zig" },

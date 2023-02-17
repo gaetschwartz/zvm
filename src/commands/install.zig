@@ -7,6 +7,7 @@ const ansi = @import("ansi");
 const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const RunContext = @import("../arg_parser.zig").ArgParser.RunContext;
+const Command = @import("../arg_parser.zig").Command;
 const VersionInfo = @import("list.zig").VersionInfo;
 const readVersionInfo = @import("list.zig").readVersionInfo;
 
@@ -436,29 +437,27 @@ pub fn IndexCompleter(comptime doShowVerions: bool) type {
     return struct {
         const Self = @This();
 
-        pub fn complete(word: []const u8) !void {
-            var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-            defer _ = gpa.deinit();
-            const allocator = gpa.allocator();
+        pub fn complete(ctx: Command.CompletionContext) !std.ArrayList(Command.Completion) {
+            var completions = std.ArrayList(Command.Completion).init(ctx.allocator);
             const stdout = std.io.getStdOut().writer();
+            _ = stdout;
 
-            var index = try idx.fetchIndex(allocator);
+            var index = try idx.fetchIndex(ctx.allocator);
             defer index.deinit();
 
-            var channels = std.StringHashMap(bool).init(allocator);
+            var channels = std.StringHashMap(bool).init(ctx.allocator);
             defer channels.deinit();
 
             for (index.releases.items) |release| {
                 if (doShowVerions) {
-                    if (mem.startsWith(u8, release.version, word)) {
-                        try stdout.print("{s} ", .{release.version});
-                    }
+                    try completions.append(.{ .name = release.version, .description = release.channel });
                 }
-                if (mem.startsWith(u8, release.channel, word) and !channels.contains(release.channel)) {
-                    try stdout.print("{s} ", .{release.channel});
+                if (!channels.contains(release.channel)) {
+                    try completions.append(.{ .name = release.channel });
                     try channels.put(release.channel, true);
                 }
             }
+            return completions;
         }
     };
 }

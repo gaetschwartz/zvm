@@ -237,6 +237,7 @@ pub const ArgParser = struct {
             .options = command.options,
             .commands = std.ArrayList(*Command).init(self.allocator),
             .allocator = self.allocator,
+            .parent = null,
         };
     }
 
@@ -335,7 +336,7 @@ pub const ArgParser = struct {
             .command = command,
         };
         try command.handler.?(context);
-        return;
+        std.log.debug("Finished running command: {s}", .{command.name});
     }
 
     pub fn deinit(self: *ArgParser) void {
@@ -358,7 +359,18 @@ pub const Command = struct {
     add_help: bool = true,
     hidden: bool = false,
 
-    pub const PositionalCompleter = *const fn (word: []const u8) anyerror!void;
+    pub const Completion = struct {
+        name: []const u8,
+        description: ?[]const u8 = null,
+    };
+
+    pub const CompletionArrayList = std.ArrayList(Completion);
+
+    pub const CompletionContext = struct {
+        allocator: std.mem.Allocator,
+    };
+
+    pub const PositionalCompleter = *const fn (ctx: CompletionContext) anyerror!CompletionArrayList;
     pub const CreateCommandOptions = struct {
         name: []const u8,
         description: []const u8,

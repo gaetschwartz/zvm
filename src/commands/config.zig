@@ -164,13 +164,18 @@ pub fn writeConfig(context: Context, config: ZvmConfig) !void {
     );
 }
 
-pub fn complete_config_keys(word: []const u8) !void {
+pub fn complete_config_keys(ctx: Command.CompletionContext) !std.ArrayList(Command.Completion) {
     const stdout = std.io.getStdOut().writer();
+    _ = stdout;
+    var completions = std.ArrayList(Command.Completion).init(ctx.allocator);
 
     const typeInfo = @typeInfo(ZvmConfig);
     inline for (typeInfo.Struct.fields) |field| {
-        if (std.mem.startsWith(u8, field.name, word)) {
-            try stdout.print("{s} ", .{field.name});
-        }
+        try completions.append(Command.Completion{
+            .name = field.name,
+            .description = "The " ++ field.name ++ " config key",
+        });
     }
+
+    return completions;
 }
