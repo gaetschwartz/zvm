@@ -49,7 +49,7 @@ zvm zig build -Doptimize=ReleaseFast
 ```
 ```zsh
 # or with a specific version
-zvm spawn 0.10.1 zig build -Doptimize=ReleaseFast
+zvm spawn 0.10.1 build -Doptimize=ReleaseFast
 ```
 
 ## 📥 Installation
