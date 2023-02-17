@@ -283,7 +283,7 @@ pub inline fn createParser(allocator: std.mem.Allocator) !ArgParser {
     });
     const cfg = try parser.addCommand(.{
         .name = "config",
-        .description = "Configure zvm.",
+        .description = "Configure zvm",
         .handler = &config_cmd,
         .flags = &[_]Command.Flag{
             .{
