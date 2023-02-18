@@ -46,30 +46,38 @@ pub fn cache_size_cmd(ctx: ArgParser.RunContext) !void {
         else => return err,
     };
 
-    const size = try dirSize(cache_dir, allocator);
-    if (size == 0) {
-        try stdout.print(ansi.style("The cache is empty.\n", .cyan), .{});
-        return;
-    }
-    const human_size = humanSize(size, allocator);
+    const info = try dirSize(cache_dir, allocator);
+    const human_size = humanSize(info.size, allocator);
     defer allocator.free(human_size);
-    try stdout.print(ansi.style("The cache has a size of " ++ ansi.bold("{s}") ++ ".\n", .cyan), .{human_size});
+    try stdout.print(ansi.style("Total: " ++ ansi.bold("{d}") ++ " files, " ++ ansi.bold("{s}") ++ "\n", .cyan), .{ info.files, human_size });
 }
 
+const CacheInfo = struct {
+    size: u64,
+    files: u64,
+};
+
 // recuring function to get the size of a directory
-fn dirSize(dir: std.fs.IterableDir, allocator: std.mem.Allocator) !u64 {
-    var total: u64 = 0;
+fn dirSize(dir: std.fs.IterableDir, allocator: std.mem.Allocator) !CacheInfo {
+    var total: CacheInfo = .{ .size = 0, .files = 0 };
     var iter = dir.iterate();
     while (try iter.next()) |entry| {
         switch (entry.kind) {
             .Directory => {
                 var sub_dir = try dir.dir.openIterableDir(entry.name, .{});
                 defer sub_dir.close();
-                total += try dirSize(sub_dir, allocator);
+                const info = try dirSize(sub_dir, allocator);
+                total = .{
+                    .size = total.size + info.size,
+                    .files = total.files + info.files,
+                };
             },
             .File => {
                 const stat = try dir.dir.statFile(entry.name);
-                total += stat.size;
+                total = .{
+                    .size = total.size + stat.size,
+                    .files = total.files + 1,
+                };
             },
             else => {},
         }
