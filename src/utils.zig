@@ -135,5 +135,5 @@ pub fn shasum(reader: std.fs.File.Reader, out_buffer: *[digest_length * 2]u8) !v
     hash.final(temp_buffer[0..]);
     // to hex
     var stream = std.io.fixedBufferStream(out_buffer[0..]);
-    try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("", .{}, stream.writer());
+    try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("{}", .{}, stream.writer());
 }

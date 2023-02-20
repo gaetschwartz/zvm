@@ -61,11 +61,16 @@ pub fn install_cmd(ctx: RunContext) !void {
     const zvm_versions = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions" });
     const zvm_cache = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "cache" });
     const zvm_cache_web = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache, "web" });
+    const zvm_cache_temp = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache, "temp" });
+    const temp_name = try std.fmt.allocPrint(allocator, "{x}", .{std.time.milliTimestamp()});
+    const zvm_cache_temp_target = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache_temp, temp_name });
 
     try utils.makeDirAbsolutePermissive(zvm);
     try utils.makeDirAbsolutePermissive(zvm_versions);
     try utils.makeDirAbsolutePermissive(zvm_cache);
     try utils.makeDirAbsolutePermissive(zvm_cache_web);
+    try utils.makeDirAbsolutePermissive(zvm_cache_temp);
+    try utils.makeDirAbsolutePermissive(zvm_cache_temp_target);
 
     const version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_versions, target });
     const version_info_path = try std.fs.path.join(allocator, &[_][]const u8{ version_path, ".zvm.json" });
@@ -107,7 +112,8 @@ pub fn install_cmd(ctx: RunContext) !void {
             if (err == error.FileNotFound) {
                 break :blk false;
             }
-            return err;
+            stderr.print("error opening cached archive: {any}\n", .{err}) catch {};
+            break :blk false;
         };
         defer cached_archive.close();
 
@@ -126,7 +132,7 @@ pub fn install_cmd(ctx: RunContext) !void {
 
     if (is_cached) {
         std.log.debug("archive is cached", .{});
-        try stdout.print(ansi.style("Using cached archive {s}\n", .{ .green, .fade }), .{filename});
+        try stdout.print(ansi.style("Using {s} from cache...\n", .{ .blue, .fade }), .{release.version});
     } else {
         try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "... ", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
 
@@ -138,41 +144,36 @@ pub fn install_cmd(ctx: RunContext) !void {
         });
     }
 
-    std.log.debug("unarchiving {s}", .{filename});
+    std.log.debug("unarchiving {s} to {s}", .{ filename, zvm_cache_temp_target });
 
     const archive_type = utils.archiveType(filename);
     switch (archive_type) {
         .zip => {
-            try unarchiveZip(cache_path, zvm_versions, allocator);
+            try unarchiveZip(cache_path, zvm_cache_temp_target, allocator);
         },
         .@"tar.xz" => {
-            try unarchiveTarXz(cache_path, zvm_versions, allocator);
+            try unarchiveTarXz(cache_path, zvm_cache_temp_target, allocator);
         },
         .Unknown => {
             std.log.debug("unknown archive type of {s}", .{std.fs.path.basename(filename)});
             return;
         },
     }
-    std.log.debug("Unarchived {s} to {s}", .{ filename, zvm_versions });
+    std.log.debug("Unarchiving complete", .{});
 
     // rename the directory to the version
-    const archive_folder = utils.stripExtension(filename, archive_type);
-    const archive_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_versions, archive_folder });
+
+    const archive_path = try getFirstDirInDir(allocator, zvm_cache_temp_target);
+    defer allocator.free(archive_path);
+
     std.log.debug("archive path: {s}", .{archive_path});
+    // remove old version if it exists
+    std.log.debug("removing old version: {s}", .{version_path});
+    try std.fs.deleteTreeAbsolute(version_path);
+    std.log.debug("renaming {s} to {s}", .{ archive_path, version_path });
     try std.fs.renameAbsolute(archive_path, version_path);
-    // const argv = switch (builtin.os.tag) {
-    //     .windows => &[_][]const u8{ "powershell", "-Command", "Rename-Item", archive_path, version_path, "-Force" },
-    //     else => &[_][]const u8{ "mv", archive_path, version_path },
-    // };
-    // const res = try std.ChildProcess.exec(.{
-    //     .argv = argv,
-    //     .allocator = allocator,
-    // });
-    // handleResult(res.term, argv) catch |err| {
-    //     std.log.err("could not rename archive: {any}", .{err});
-    //     return;
-    // };
-    std.log.debug("renamed {s} to {s}\n", .{ archive_path, version_path });
+    std.log.debug("deleting temp directory: {s}", .{zvm_cache_temp_target});
+    try std.fs.deleteTreeAbsolute(zvm_cache_temp_target);
 
     // write the version file
     const version_file_path = try std.fs.path.join(allocator, &[_][]const u8{ version_path, ".zvm.json" });
@@ -187,6 +188,32 @@ pub fn install_cmd(ctx: RunContext) !void {
     std.log.debug("wrote version file to {s}", .{version_file_path});
 
     try stdout.print(ansi.style("Successfully installed " ++ ansi.bold("{s}") ++ ".\n", .green), .{target});
+}
+
+fn getFirstDirInDir(allocator: std.mem.Allocator, dir: []const u8) ![]const u8 {
+    var dir_file = try std.fs.openIterableDirAbsolute(dir, .{});
+    defer dir_file.close();
+
+    var dir_it = dir_file.iterate();
+    var found: ?[]const u8 = null;
+    while (try dir_it.next()) |entry| {
+        if (entry.kind == .Directory) {
+            if (builtin.mode != .Debug) {
+                if (found != null) {
+                    return error.MultipleDirectoriesFound;
+                }
+            }
+            found = try std.fs.path.join(allocator, &[_][]const u8{ dir, entry.name });
+            if (builtin.mode != .Debug) {
+                break;
+            }
+        }
+    }
+    if (found != null) {
+        return found.?;
+    } else {
+        return error.NoDirectoryFound;
+    }
 }
 
 fn getLatestReleaseForChannel(index: Index, channel: []const u8) ?Release {
