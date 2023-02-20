@@ -4,6 +4,7 @@ const ArgParser = arg_parser.ArgParser;
 const ParsedArgs = arg_parser.ParsedArgs;
 const Command = arg_parser.Command;
 const zvmDir = @import("../utils.zig").zvmDir;
+const HumanSize = @import("../utils.zig").HumanSize;
 const handleResult = @import("install.zig").handleResult;
 const printArgv = @import("install.zig").printArgv;
 const path = std.fs.path;
@@ -47,15 +48,18 @@ pub fn cache_size_cmd(ctx: ArgParser.RunContext) !void {
     };
 
     const info = try dirSize(cache_dir, allocator);
-    const human_size = humanSize(info.size, allocator);
-    defer allocator.free(human_size);
-    try stdout.print(ansi.style("Total: " ++ ansi.bold("{d}") ++ " files, " ++ ansi.bold("{s}") ++ "\n", .cyan), .{ info.files, human_size });
+    const human_size = HumanSize(f64).compute(@intToFloat(f64, info.size));
+    try stdout.print(ansi.style("Total: " ++ ansi.bold("{d}") ++ " files, " ++ ansi.bold("{d:.1} {s}") ++ "\n", .cyan), .{ info.files, human_size.value, human_size.unit });
 }
 
 const CacheInfo = struct {
     size: u64,
     files: u64,
 };
+
+inline fn ignoreFile(name: []const u8) bool {
+    return name.len > 1 and name[0] == '.';
+}
 
 // recuring function to get the size of a directory
 fn dirSize(dir: std.fs.IterableDir, allocator: std.mem.Allocator) !CacheInfo {
@@ -73,6 +77,7 @@ fn dirSize(dir: std.fs.IterableDir, allocator: std.mem.Allocator) !CacheInfo {
                 };
             },
             .File => {
+                if (ignoreFile(entry.name)) continue;
                 const stat = try dir.dir.statFile(entry.name);
                 total = .{
                     .size = total.size + stat.size,
@@ -83,14 +88,4 @@ fn dirSize(dir: std.fs.IterableDir, allocator: std.mem.Allocator) !CacheInfo {
         }
     }
     return total;
-}
-
-fn humanSize(size: u64, allocator: std.mem.Allocator) []const u8 {
-    const units = [_][]const u8{ "B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB" };
-    var i: usize = 0;
-    var s = size;
-    while (s > 1024) : (s >>= 10) {
-        i += 1;
-    }
-    return std.fmt.allocPrint(allocator, "{d} {s}", .{ s, units[i] }) catch unreachable;
 }

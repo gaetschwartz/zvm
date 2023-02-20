@@ -94,6 +94,11 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    _ = registerTest(b, test_step, .{
+        .root_source_file = .{ .path = "src/utils.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
 }
 
 inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.TestOptions) *std.Build.CompileStep {

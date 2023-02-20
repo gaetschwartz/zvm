@@ -65,25 +65,41 @@ pub fn makeDirAbsolutePermissive(absolute_path: []const u8) !void {
     };
 }
 
-const HumanSize = struct {
-    value: i64,
-    unit: []const u8,
+const HumanSizes = enum {
+    B,
+    KB,
+    MB,
+    GB,
+    TB,
+    PB,
 };
 
-fn humanSize(size: i64) HumanSize {
-    const KB = 1024;
-    const MB = KB * 1024;
-    const GB = MB * 1024;
+pub fn HumanSize(comptime T: type) type {
+    return struct {
+        value: T,
+        unit: []const u8,
 
-    if (size < KB) {
-        return HumanSize{ .value = size, .unit = "B" };
-    } else if (size < MB) {
-        return HumanSize{ .value = @divTrunc(size, KB), .unit = "KB" };
-    } else if (size < GB) {
-        return HumanSize{ .value = @divTrunc(size, MB), .unit = "MB" };
-    } else {
-        return HumanSize{ .value = @divTrunc(size, GB), .unit = "GB" };
-    }
+        const Self = @This();
+
+        pub fn compute(size: T) Self {
+            const typeInfo = @typeInfo(HumanSizes);
+            const enum_obj = typeInfo.Enum;
+            var x = size;
+            inline for (enum_obj.fields[0 .. enum_obj.fields.len - 1]) |field| {
+                if (x < 1024) {
+                    return Self{
+                        .value = x,
+                        .unit = field.name,
+                    };
+                }
+                x /= 1024;
+            }
+            return Self{
+                .value = x,
+                .unit = enum_obj.fields[enum_obj.fields.len - 1].name,
+            };
+        }
+    };
 }
 
 const isDebugMode = builtin.mode == .Debug;
@@ -136,4 +152,37 @@ pub fn shasum(reader: std.fs.File.Reader, out_buffer: *[digest_length * 2]u8) !v
     // to hex
     var stream = std.io.fixedBufferStream(out_buffer[0..]);
     try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("{}", .{}, stream.writer());
+}
+
+test "human size" {
+    const cases = [_]struct {
+        size: u64,
+        expected: HumanSize(u64),
+    }{
+        .{ .size = 0, .expected = HumanSize(u64){ .value = 0, .unit = "B" } },
+        .{ .size = 1, .expected = HumanSize(u64){ .value = 1, .unit = "B" } },
+        .{ .size = 1023, .expected = HumanSize(u64){ .value = 1023, .unit = "B" } },
+        .{ .size = 1024, .expected = HumanSize(u64){ .value = 1, .unit = "KB" } },
+        .{ .size = 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "KB" } },
+        .{ .size = 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "MB" } },
+        .{ .size = 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "MB" } },
+        .{ .size = 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "GB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "GB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "TB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "TB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "PB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "PB" } },
+    };
+    for (cases) |c| {
+        const actual = HumanSize(u64).compute(c.size);
+        expectHumanSize(c.expected, actual) catch |err| {
+            std.debug.print("expected: {d} {s}, actual: {d} {s}\n", .{ c.expected.value, c.expected.unit, actual.value, actual.unit });
+            return err;
+        };
+    }
+}
+
+fn expectHumanSize(expected: HumanSize(u64), actual: HumanSize(u64)) !void {
+    try std.testing.expectEqual(expected.value, actual.value);
+    try std.testing.expectEqualStrings(expected.unit, actual.unit);
 }
