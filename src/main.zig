@@ -15,7 +15,6 @@ pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
     var allocator = arena.allocator();
     // parse args
-    var iter = try std.process.argsWithAllocator(allocator);
     var parser = try createParser(allocator);
     defer parser.deinit();
 
@@ -27,7 +26,9 @@ pub fn main() !void {
         }
     }
 
-    try parser.parse(&iter);
+    var iter = try std.process.argsWithAllocator(allocator);
+    defer iter.deinit();
+    try parser.parseArgv(&iter);
 
     parser.run() catch |err| {
         const stderr = std.io.getStdErr().writer();

@@ -9,16 +9,21 @@ pub fn Pair(comptime T1: type, comptime T2: type) type {
 
 pub const ParsedArgs = struct {
     positionals: std.ArrayList(Pair(Command.Positional, []const u8)),
-    flags: std.StringArrayHashMap(Pair(Command.Flag, usize)),
-    options: std.StringArrayHashMap(Pair(Command.Option, []const u8)),
-    additional_flags: std.StringArrayHashMap(usize),
-    additional_options: std.StringArrayHashMap([]const u8),
+    flags: StructArrayHashMap(ShortOrLong, Pair(Command.Flag, usize)),
+    options: StructArrayHashMap(ShortOrLong, Pair(Command.Option, []const u8)),
+    additional_flags: StructArrayHashMap(ShortOrLong, usize),
+    additional_options: StructArrayHashMap(ShortOrLong, []const u8),
     additional_positionals: std.ArrayList([]const u8),
     raw_args: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
 
     pub fn hasFlag(self: *ParsedArgs, key: []const u8) bool {
-        return self.flags.contains(key) or self.additional_flags.contains(key);
+        if (key.len == 1) {
+            return self.flags.contains(.{ .short = key[0] }) or self.additional_flags.contains(.{ .short = key[0] });
+        } else {
+            return self.flags.contains(.{ .long = key }) or self.additional_flags.contains(.{ .long = key });
+        }
+        return false;
     }
 
     pub fn deinit(self: *ParsedArgs) void {
@@ -57,12 +62,25 @@ pub const ParsedArgs = struct {
         return null;
     }
 
+    pub const ShortOrLong = union(enum) {
+        short: u8,
+        long: []const u8,
+    };
+
+    fn addOrIncrementAddiFlag(flags: *StructArrayHashMap(ShortOrLong, usize), key: ShortOrLong) !void {
+        if (flags.get(key)) |count| {
+            try flags.put(key, count + 1);
+        } else {
+            try flags.put(key, 1);
+        }
+    }
+
     pub fn parseArgs(allocator: std.mem.Allocator, args: [][]const u8, command: *Command) !ParsedArgs {
         var positionals = std.ArrayList(Pair(Command.Positional, []const u8)).init(allocator);
-        var flags = std.StringArrayHashMap(Pair(Command.Flag, usize)).init(allocator);
-        var options = std.StringArrayHashMap(Pair(Command.Option, []const u8)).init(allocator);
-        var additional_flags = std.StringArrayHashMap(usize).init(allocator);
-        var additional_options = std.StringArrayHashMap([]const u8).init(allocator);
+        var flags = StructArrayHashMap(ShortOrLong, Pair(Command.Flag, usize)).init(allocator);
+        var options = StructArrayHashMap(ShortOrLong, Pair(Command.Option, []const u8)).init(allocator);
+        var additional_flags = StructArrayHashMap(ShortOrLong, usize).init(allocator);
+        var additional_options = StructArrayHashMap(ShortOrLong, []const u8).init(allocator);
         var additional_positionals = std.ArrayList([]const u8).init(allocator);
         var raw_args = std.ArrayList([]const u8).init(allocator);
 
@@ -70,19 +88,22 @@ pub const ParsedArgs = struct {
         var current_positional_index: usize = 0;
         for (args) |arg| {
             try raw_args.append(arg);
+            //* If its a long option/flag like "--foo"
             if (std.mem.startsWith(u8, arg, "--")) {
-                // if contains '=' then it's an option
+                //* if contains '=' then it's an option
                 const indexOfEq = std.mem.indexOf(u8, arg, "=");
                 if (indexOfEq) |index| {
                     const key = arg[2..index];
                     const value = arg[index + 1 ..];
                     if (optionForKey(key, command)) |option| {
-                        if (option.name) |name| try options.put(&[_]u8{name}, .{ .t1 = option, .t2 = value });
-                        try options.put(key, .{ .t1 = option, .t2 = value });
+                        if (option.name) |name| try options.put(.{ .short = name }, .{ .t1 = option, .t2 = value });
+                        try options.put(.{ .long = key }, .{ .t1 = option, .t2 = value });
                     } else {
-                        try additional_options.put(key, value);
+                        try additional_options.put(.{ .long = key }, value);
                     }
-                } else {
+                } else
+                //* if it doesn't contain '=' then it's a flag
+                {
                     // if it's a single character flag like "--f".
                     // in this case we must check if it is a flag or an option
                     // if it's an option, then the next argument is the value
@@ -90,35 +111,43 @@ pub const ParsedArgs = struct {
                     if (optionForKey(key, command)) |option| {
                         current_option = option;
                     } else if (flagForKey(key, command)) |flag| {
-                        if (flag.name) |name| try flags.put(&[_]u8{name}, .{ .t1 = flag, .t2 = 1 });
-                        try flags.put(key, .{ .t1 = flag, .t2 = 1 });
+                        if (flag.name) |name| try flags.put(.{ .short = name }, .{ .t1 = flag, .t2 = 1 });
+                        try flags.put(.{ .long = key }, .{ .t1 = flag, .t2 = 1 });
                     } else {
-                        try additional_flags.put(key, 1);
+                        try addOrIncrementAddiFlag(&additional_flags, .{ .long = key });
                     }
                 }
-            } else if (std.mem.startsWith(u8, arg, "-")) {
+            }
+            //* If its a short option/flag like "-f"
+            else if (std.mem.startsWith(u8, arg, "-")) {
                 // if contains '=' then it's an option
                 const indexOfEq = std.mem.indexOf(u8, arg, "=");
                 // only if it's a single character flag with an equals sign like so:
                 // -f=bar
-                if (indexOfEq != null and indexOfEq.? == 2) {
-                    const key = arg[1..2];
-                    const value = arg[3..];
-                    if (optionForKey(key, command)) |option| {
-                        try options.put(key, .{ .t1 = option, .t2 = value });
-                        if (option.long_name) |name| try options.put(name, .{ .t1 = option, .t2 = value });
+                if (indexOfEq) |index| {
+                    if (index == 2) {
+                        const key = arg[1..2];
+                        const value = arg[3..];
+                        if (optionForKey(key, command)) |option| {
+                            try options.put(.{ .short = key[0] }, .{ .t1 = option, .t2 = value });
+                            if (option.long_name) |name| try options.put(.{ .long = name }, .{ .t1 = option, .t2 = value });
+                        } else {
+                            try additional_options.put(.{ .short = arg[1] }, value);
+                        }
                     } else {
-                        try additional_options.put(key, value);
+                        return error.InvalidOption;
                     }
-                } else if (args.len > 2) {
+                }
+                // if there are multiple flags like so: -abc
+                else if (arg.len > 2) {
                     var i: usize = 1;
                     while (i < arg.len) : (i += 1) {
                         const key = arg[i .. i + 1];
                         if (flagForKey(key, command)) |flag| {
-                            try flags.put(key, .{ .t1 = flag, .t2 = 1 });
-                            if (flag.long_name) |name| try flags.put(name, .{ .t1 = flag, .t2 = 1 });
+                            try flags.put(.{ .short = arg[i] }, .{ .t1 = flag, .t2 = 1 });
+                            if (flag.long_name) |name| try flags.put(.{ .long = name }, .{ .t1 = flag, .t2 = 1 });
                         } else {
-                            try additional_flags.put(key, 1);
+                            try addOrIncrementAddiFlag(&additional_flags, .{ .short = arg[i] });
                         }
                     }
                 } else {
@@ -129,16 +158,18 @@ pub const ParsedArgs = struct {
                     if (optionForKey(key, command)) |option| {
                         current_option = option;
                     } else if (flagForKey(key, command)) |flag| {
-                        try flags.put(key, .{ .t1 = flag, .t2 = 1 });
-                        if (flag.long_name) |name| try flags.put(name, .{ .t1 = flag, .t2 = 1 });
+                        try flags.put(.{ .short = arg[1] }, .{ .t1 = flag, .t2 = 1 });
+                        if (flag.long_name) |name| try flags.put(.{ .long = name }, .{ .t1 = flag, .t2 = 1 });
                     } else {
-                        try additional_flags.put(key, 1);
+                        try addOrIncrementAddiFlag(&additional_flags, .{ .short = arg[1] });
                     }
                 }
-            } else {
+            }
+            //* If it doesn't start with '-' then it's a positional.
+            else {
                 if (current_option) |option| {
-                    const name = option.long_name orelse &[_]u8{option.name.?};
-                    try options.put(name, .{ .t1 = option, .t2 = arg });
+                    if (option.long_name) |name| try options.put(.{ .long = name }, .{ .t1 = option, .t2 = arg });
+                    if (option.name) |name| try options.put(.{ .short = name }, .{ .t1 = option, .t2 = arg });
                     current_option = null;
                 } else if (current_positional_index < command.positionals.len) {
                     const positional = command.positionals[current_positional_index];
@@ -167,21 +198,21 @@ pub const ParsedArgs = struct {
 
         // check if any required flags/options are missing
         for (command.flags) |flag| {
-            if (flag.long_name != null and self.flags.contains(flag.long_name.?)) continue;
-            if (flag.name != null and self.flags.contains(&[_]u8{flag.name.?})) continue;
+            if (flag.long_name != null and self.flags.contains(.{ .long = flag.long_name.? })) continue;
+            if (flag.name != null and self.flags.contains(.{ .short = flag.name.? })) continue;
             if (flag.optional) continue;
             stderr.print(ansi.style("Missing required flag: " ++ ansi.bold("{s}\n"), .red), .{flag.long_name.?}) catch {};
             std.os.exit(1);
         }
         for (command.options) |option| {
-            if (option.long_name != null and self.options.contains(option.long_name.?)) continue;
-            if (option.name != null and self.options.contains(&[_]u8{option.name.?})) continue;
+            if (option.long_name != null and self.options.contains(.{ .long = option.long_name.? })) continue;
+            if (option.name != null and self.options.contains(.{ .short = option.name.? })) continue;
             if (option.default_value) |default_value| {
-                if (option.long_name) |name| try self.options.put(name, .{ .t1 = option, .t2 = default_value });
-                if (option.name) |name| try self.options.put(&[_]u8{name}, .{ .t1 = option, .t2 = default_value });
+                if (option.long_name) |name| try self.options.put(.{ .long = name }, .{ .t1 = option, .t2 = default_value });
+                if (option.name) |name| try self.options.put(.{ .short = name }, .{ .t1 = option, .t2 = default_value });
                 continue;
             }
-            stderr.print(ansi.style("Missing required option: " ++ ansi.bold("{s}\n"), .red), .{option.long_name.?}) catch {};
+            stderr.print(ansi.style("Missing required option: " ++ ansi.bold("{s}\n"), .red), .{(option.long_name orelse &[_]u8{option.name.?})}) catch {};
             std.os.exit(1);
         }
         var hasSeenOptional = false;
@@ -214,13 +245,13 @@ pub const ArgParser = struct {
         };
     }
 
-    pub fn parse(self: *ArgParser, iter: *std.process.ArgIterator) !void {
+    pub fn parseArgv(self: *ArgParser, iter: *std.process.ArgIterator) !void {
         while (iter.next()) |arg| {
             try self.args.append(arg);
         }
     }
 
-    pub fn parseArgs(self: *ArgParser, args: []const []const u8) !void {
+    pub fn parse(self: *ArgParser, args: []const []const u8) !void {
         try self.args.appendSlice(args);
     }
 
@@ -259,14 +290,14 @@ pub const ArgParser = struct {
         }
 
         pub fn getOption(self: RunContext, name: []const u8) ?[]const u8 {
-            if (self.args.options.get(name)) |value| {
+            if (self.args.options.get(if (name.len == 1) .{ .short = name[0] } else .{ .long = name })) |value| {
                 return value.t2;
             }
             return null;
         }
 
         pub fn hasFlag(self: RunContext, name: []const u8) bool {
-            return self.args.flags.contains(name);
+            return self.args.flags.contains(if (name.len == 1) .{ .short = name[0] } else .{ .long = name });
         }
     };
 
@@ -277,15 +308,12 @@ pub const ArgParser = struct {
             if (std.mem.startsWith(u8, command_name, "-")) {
                 break;
             }
-            switch (builtin.mode) {
-                inline .Debug => {
-                    std.debug.print("Commands at depth {d} of {s}:\n", .{ depth, command.name });
-                    for (command.commands.items) |c| {
-                        std.debug.print("  {s}", .{c.name});
-                    }
-                    std.debug.print("\n", .{});
-                },
-                inline else => {},
+            if (builtin.mode == .Debug) {
+                std.debug.print("Commands at depth {d} of {s}:\n", .{ depth, command.name });
+                for (command.commands.items) |c| {
+                    std.debug.print("  {s}", .{c.name});
+                }
+                std.debug.print("\n", .{});
             }
             for (command.commands.items) |c| {
                 if (std.mem.eql(u8, c.name, command_name)) {
@@ -304,8 +332,8 @@ pub const ArgParser = struct {
             std.os.exit(1);
         };
         if (command.add_help) {
-            if (parsed_args.additional_flags.contains("help") or
-                parsed_args.additional_flags.contains("h"))
+            if (parsed_args.additional_flags.contains(.{ .short = 'h' }) or
+                parsed_args.additional_flags.contains(.{ .long = "help" }))
             {
                 command.printHelp(std.io.getStdOut().writer()) catch |err| {
                     std.io.getStdErr().writer().print("Error printing help: {any}\n", .{err}) catch {};
@@ -507,19 +535,45 @@ pub const Command = struct {
         }
     }
 
+    pub const Flag = struct {
+        name: ?u8,
+        long_name: ?[]const u8,
+        optional: bool = true,
+        description: []const u8 = "",
+
+        pub fn hash(self: Flag) u32 {
+            var h: u32 = 0;
+            if (self.name) |name| {
+                h ^= @bitCast(u32, name);
+            }
+            if (self.long_name) |long_name| {
+                for (long_name) |c| {
+                    h ^= @bitCast(u32, c);
+                }
+            }
+            return h;
+        }
+    };
+
     pub const Option = struct {
         name: ?u8 = null,
         long_name: ?[]const u8 = null,
         default_value: ?[]const u8 = null,
         description: []const u8 = "",
         value_name: []const u8 = "value",
-    };
 
-    pub const Flag = struct {
-        name: ?u8,
-        long_name: ?[]const u8,
-        optional: bool = true,
-        description: []const u8 = "",
+        pub fn hash(self: Option) u32 {
+            var h: u32 = 0;
+            if (self.name) |name| {
+                h ^= @bitCast(u32, name);
+            }
+            if (self.long_name) |long_name| {
+                for (long_name) |c| {
+                    h ^= @bitCast(u32, c);
+                }
+            }
+            return h;
+        }
     };
 
     pub const Positional = struct {
@@ -529,81 +583,6 @@ pub const Command = struct {
         completer: ?PositionalCompleter = null,
     };
 };
-
-fn handler(ctx: ArgParser.RunContext) !void {
-    try testing.expectEqualStrings(ctx.getPositional("positional").?, "positional_value");
-    try testing.expect(ctx.hasFlag("long"));
-    try testing.expect(ctx.hasFlag("s"));
-    try testing.expectEqualStrings(ctx.getOption("option").?, "default_option_value");
-    try testing.expectEqualStrings(ctx.getOption("p").?, "short");
-}
-
-fn throw_handler(ctx: ArgParser.RunContext) !void {
-    _ = ctx;
-    return error.ThrowHandlerCalled;
-}
-
-test "parsing sample data" {
-    var allocator = std.testing.allocator;
-    var argv = &[_][]const u8{
-        "test",
-        "command",
-        "positional_value",
-        "-s",
-        "--long",
-        "-p=short",
-    };
-    var parser = ArgParser.init(allocator);
-    defer parser.deinit();
-    try parser.parseArgs(argv);
-
-    parser.setRootCommand(.{
-        .name = "root",
-        .description = "root description",
-        .handler = throw_handler,
-    });
-
-    _ = try parser.addCommand(.{
-        .name = "command",
-        .description = "command description",
-        .handler = handler,
-        .flags = &[_]Command.Flag{
-            Command.Flag{
-                .name = null,
-                .long_name = "long",
-                .description = "flag description",
-            },
-            Command.Flag{
-                .name = 's',
-                .long_name = null,
-                .description = "flag description",
-            },
-        },
-        .options = &[_]Command.Option{
-            Command.Option{
-                .name = 'o',
-                .long_name = "option",
-                .value_name = "option_value",
-                .description = "option description",
-                .default_value = "default_option_value",
-            },
-            Command.Option{
-                .name = 'p',
-                .long_name = "potion",
-                .value_name = "option_value",
-                .description = "option description",
-            },
-        },
-        .positionals = &[_]Command.Positional{
-            Command.Positional{
-                .name = "positional",
-                .description = "positional description",
-            },
-        },
-    });
-
-    try parser.run();
-}
 
 pub const HelpCommandCreateOptions = struct {
     name: []const u8 = "help",
@@ -638,6 +617,129 @@ fn help_cmd_impl(ctx: ArgParser.RunContext) !void {
     try command.printHelp(std.io.getStdOut().writer());
 }
 
+fn throw_handler(ctx: ArgParser.RunContext) !void {
+    _ = ctx;
+    return error.ThrowHandlerCalled;
+}
+
+test "parsing sample data" {
+    var allocator = std.testing.allocator;
+    var argv = &[_][]const u8{
+        "test",
+        "command",
+        "positional_value",
+        "-s",
+        "--long",
+        "-p=short",
+        "-q",
+        "i_love_silence",
+    };
+    var parser = ArgParser.init(allocator);
+    defer parser.deinit();
+    try parser.parse(argv);
+
+    parser.setRootCommand(.{
+        .name = "root",
+        .description = "root description",
+        .handler = throw_handler,
+    });
+
+    _ = try parser.addCommand(.{
+        .name = "command",
+        .description = "command description",
+        .handler = handler,
+        .flags = &[_]Command.Flag{
+            Command.Flag{
+                .name = null,
+                .long_name = "long",
+                .description = "long flag description",
+            },
+            Command.Flag{
+                .name = 's',
+                .long_name = null,
+                .description = "short flag description",
+            },
+        },
+        .options = &[_]Command.Option{
+            Command.Option{
+                .name = 'o',
+                .long_name = "option",
+                .value_name = "option_value",
+                .description = "option description",
+                .default_value = "default_option_value",
+            },
+            Command.Option{
+                .name = 'p',
+                .long_name = "potion",
+                .value_name = "potion_value",
+                .description = "potions are good",
+            },
+            Command.Option{
+                .name = 'q',
+                .long_name = "quiet",
+                .value_name = "quiet_value",
+                .description = "quiet description",
+            },
+        },
+        .positionals = &[_]Command.Positional{
+            Command.Positional{
+                .name = "positional",
+                .description = "positional description",
+            },
+        },
+    });
+
+    try parser.run();
+}
+
+fn handler(ctx: ArgParser.RunContext) !void {
+    // for (ctx.args.options.keys()) |k| {
+    //     std.debug.print("option: {s} = {s}\n", .{ if (k == .short) &[_]u8{k.short} else k.long, (ctx.args.options.get(k) orelse unreachable).t2 });
+    // }
+    // for (ctx.args.flags.keys()) |k| {
+    //     const key = if (k == .short) &[_]u8{k.short} else k.long;
+    //     var alloc = std.testing.allocator;
+    //     const key_str = try std.fmt.allocPrint(alloc, "{s}", .{key});
+    //     defer alloc.free(key_str);
+    //     try testing.expectEqualStrings(key_str, key);
+    //     try testing.expectEqual(key_str.len, key.len);
+    //     const key_hash = blk: {
+    //         var hasher = std.hash.Wyhash.init(0);
+    //         std.hash.autoHashStrat(&hasher, key, .DeepRecursive);
+    //         break :blk @truncate(u32, hasher.final());
+    //     };
+    //     const key_str_hash = blk: {
+    //         var hasher = std.hash.Wyhash.init(0);
+    //         std.hash.autoHashStrat(&hasher, key_str, .DeepRecursive);
+    //         break :blk @truncate(u32, hasher.final());
+    //     };
+    //     try testing.expectEqual(key_hash, key_str_hash);
+    //     const k_hash = blk: {
+    //         var hasher = std.hash.Wyhash.init(0);
+    //         std.hash.autoHashStrat(&hasher, k, .DeepRecursive);
+    //         break :blk @truncate(u32, hasher.final());
+    //     };
+    //     const k2_hash = blk: {
+    //         var hasher = std.hash.Wyhash.init(0);
+    //         const k2: ParsedArgs.ShortOrLong = if (key_str.len == 1) .{ .short = key_str[0] } else .{ .long = key_str };
+    //         std.hash.autoHashStrat(&hasher, k2, .DeepRecursive);
+    //         break :blk @truncate(u32, hasher.final());
+    //     };
+    //     try testing.expectEqual(k_hash, k2_hash);
+    //     std.debug.print("flag: {s} ({}, {})\n", .{ key, ctx.hasFlag(key), ctx.hasFlag(key_str) });
+    // }
+
+    try testing.expectEqualStrings(ctx.getPositional("positional").?, "positional_value");
+    try testing.expect(ctx.hasFlag("long"));
+    try testing.expect(ctx.hasFlag("s"));
+    try testing.expectEqualStrings(ctx.getOption("o").?, "default_option_value");
+    try testing.expectEqualStrings(ctx.getOption("option").?, "default_option_value");
+    try testing.expectEqualStrings(ctx.getOption("p").?, "short");
+    try testing.expectEqualStrings(ctx.getOption("potion").?, "short");
+    try testing.expectEqualStrings(ctx.getOption("q").?, "i_love_silence");
+    try testing.expectEqualStrings(ctx.getOption("quiet").?, "i_love_silence");
+}
+
 test "parsing " {
     var allocator = std.testing.allocator;
     var argv = &[_][]const u8{
@@ -650,7 +752,7 @@ test "parsing " {
     };
     var parser = ArgParser.init(allocator);
     defer parser.deinit();
-    try parser.parseArgs(argv);
+    try parser.parse(argv);
 
     parser.setRootCommand(.{
         .name = "root",
@@ -662,4 +764,63 @@ test "parsing " {
         error.ThrowHandlerCalled => {},
         else => return err,
     };
+}
+
+fn AutoStructContext(comptime K: type) type {
+    return struct {
+        pub const hash = getDeepHashFn(K, @This());
+        pub const eql = getHashEqlFn(K, @This());
+    };
+}
+
+fn getDeepHashFn(comptime K: type, comptime Context: type) (fn (Context, K) u32) {
+    return struct {
+        fn hash(ctx: Context, key: K) u32 {
+            _ = ctx;
+            var hasher = std.hash.Wyhash.init(0);
+            std.hash.autoHashStrat(&hasher, key, .DeepRecursive);
+            return @truncate(u32, hasher.final());
+        }
+    }.hash;
+}
+
+fn getHashEqlFn(comptime K: type, comptime Context: type) (fn (Context, K, K, usize) bool) {
+    return struct {
+        fn eql(ctx: Context, a: K, b: K, b_index: usize) bool {
+            _ = b_index;
+            return Context.hash(ctx, a) == Context.hash(ctx, b);
+        }
+    }.eql;
+}
+
+fn StructArrayHashMap(comptime K: type, comptime V: type) type {
+    return std.ArrayHashMap(K, V, AutoStructContext(K), true);
+}
+
+const TestUnion = union(enum) {
+    a: u8,
+    b: u16,
+    c: u32,
+};
+
+test "ArrayHashMap" {
+    var alloc = std.testing.allocator;
+    var map = StructArrayHashMap(TestUnion, u8).init(alloc);
+    defer map.deinit();
+
+    const a = TestUnion{ .a = 1 };
+    const b = TestUnion{ .b = 2 };
+    const c = TestUnion{ .c = 3 };
+
+    try map.put(a, 1);
+    try std.testing.expectEqual(map.get(a), 1);
+    try map.put(b, 2);
+    try std.testing.expectEqual(map.get(a), 1);
+    try std.testing.expectEqual(map.get(b), 2);
+    try map.put(c, 3);
+    try std.testing.expectEqual(map.get(a), 1);
+    try std.testing.expectEqual(map.get(b), 2);
+    try std.testing.expectEqual(map.get(c), 3);
+    try map.put(a, 4);
+    try std.testing.expectEqual(map.get(a), 4);
 }
