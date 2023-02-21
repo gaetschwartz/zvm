@@ -136,22 +136,44 @@ pub fn ArrayListPointers(comptime T: type) type {
     };
 }
 
-const hashMethod = std.crypto.hash.sha2.Sha256;
-pub const digest_length = hashMethod.digest_length;
+pub const Shasum256 = struct {
+    const hashMethod = std.crypto.hash.sha2.Sha256;
+    pub const digest_length = hashMethod.digest_length;
+    pub const digest_length_hex = digest_length * 2;
 
-pub fn shasum(reader: std.fs.File.Reader, out_buffer: *[digest_length * 2]u8) !void {
-    var hash = hashMethod.init(.{});
-    var buffer: [hashMethod.block_length]u8 = undefined;
-    while (true) {
-        const read = try reader.read(&buffer);
-        if (read == 0) break;
-        hash.update(buffer[0..read]);
+    pub fn compute(reader: anytype, out_buffer: *[digest_length_hex]u8) !void {
+        var hash = hashMethod.init(.{});
+        var buffer: [hashMethod.block_length]u8 = undefined;
+        while (true) {
+            const read = try reader.readAll(&buffer);
+            if (read == 0) break;
+            hash.update(buffer[0..read]);
+        }
+        var temp_buffer: [digest_length]u8 = undefined;
+        hash.final(temp_buffer[0..]);
+        // to hex
+        var stream = std.io.fixedBufferStream(out_buffer[0..]);
+        try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("{}", .{}, stream.writer());
     }
-    var temp_buffer: [digest_length]u8 = undefined;
-    hash.final(temp_buffer[0..]);
-    // to hex
-    var stream = std.io.fixedBufferStream(out_buffer[0..]);
-    try std.fmt.fmtSliceHexLower(temp_buffer[0..]).format("{}", .{}, stream.writer());
+};
+
+test "shasum" {
+    var buffer = std.io.fixedBufferStream(&[_]u8{0} ** 1024);
+    var out_buffer: [Shasum256.digest_length * 2]u8 = undefined;
+    try Shasum256.compute(buffer.reader(), &out_buffer);
+    try std.testing.expectEqualStrings("5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef", out_buffer[0..]);
+
+    buffer = std.io.fixedBufferStream(&[_]u8{'A'} ** 1024);
+    try Shasum256.compute(buffer.reader(), &out_buffer);
+    try std.testing.expectEqualStrings("6ab72eeb9e77b07540897e0c8d6d23ec8eef0f8c3a47e1b3f4e93443d9536bed", out_buffer[0..]);
+
+    buffer = std.io.fixedBufferStream("Hello, world!");
+    try Shasum256.compute(buffer.reader(), &out_buffer);
+    try std.testing.expectEqualStrings("315f5bdb76d078c43b8ac0064e4a0164", out_buffer[0..32]);
+
+    buffer = std.io.fixedBufferStream("");
+    try Shasum256.compute(buffer.reader(), &out_buffer);
+    try std.testing.expectEqualStrings("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", out_buffer[0..]);
 }
 
 test "human size" {

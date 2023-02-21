@@ -32,16 +32,14 @@ pub const Index = struct {
 };
 
 pub fn fetchIndex(allocator: std.mem.Allocator) anyerror!Index {
-    var client = http.Client{
-        .allocator = allocator,
-    };
+    var client = http.Client{ .allocator = allocator };
     defer client.deinit();
-    var uri = try std.Uri.parse("https://ziglang.org/download/index.json");
+    const uri = comptime try std.Uri.parse("https://ziglang.org/download/index.json");
     var req = try client.request(uri, .{}, .{});
     defer req.deinit();
 
     // 500 kb
-    const BUFFER_SIZE = 500 * 1024;
+    const BUFFER_SIZE = 1024 * 1024;
     var buffer: [BUFFER_SIZE]u8 = undefined;
     const total_read = try req.readAll(&buffer);
 

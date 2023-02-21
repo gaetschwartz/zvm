@@ -37,7 +37,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     std.log.debug("target string: {s}", .{target_string});
     var is_target_a_channel = true;
     const release = getRelease(index, target, &is_target_a_channel) orelse {
-        std.log.err("could not find release for channel {s}", .{target});
+        try stderr.print(ansi.style("Could not find any version for " ++ ansi.bold("{s}") ++ ".\n", .red), .{target});
         return;
     };
     if (is_upgrade and !is_target_a_channel) {
@@ -117,9 +117,9 @@ pub fn install_cmd(ctx: RunContext) !void {
         };
         defer cached_archive.close();
 
-        var cached_archive_shasum: [utils.digest_length * 2]u8 = undefined;
+        var cached_archive_shasum: [utils.Shasum256.digest_length_hex]u8 = undefined;
         // compute the shasum of the cached archive
-        try utils.shasum(cached_archive.reader(), &cached_archive_shasum);
+        try utils.Shasum256.compute(cached_archive.reader(), &cached_archive_shasum);
         // compare the shasum of the cached archive with the one in the index
         if (std.mem.eql(u8, &cached_archive_shasum, archive.shasum)) {
             std.log.debug("shasum match: {s} == {s}", .{ cached_archive_shasum, archive.shasum });
@@ -142,6 +142,19 @@ pub fn install_cmd(ctx: RunContext) !void {
             .allocator = allocator,
             .total_size = archive.size,
         });
+    }
+    // Check the sha256sum of the archive
+    {
+        var archive_shasum: [utils.Shasum256.digest_length_hex]u8 = undefined;
+        var file = try std.fs.openFileAbsolute(cache_path, .{});
+        defer file.close();
+        try utils.Shasum256.compute(file.reader(), &archive_shasum);
+        if (!std.mem.eql(u8, &archive_shasum, archive.shasum)) {
+            stderr.print(ansi.style("error: shasum mismatch for {s}\n", .{ .red, .bold }), .{archive.tarball}) catch {};
+            stderr.print(ansi.style("expected: {s}\n", .{.red}), .{archive.shasum}) catch {};
+            stderr.print(ansi.style("got: {s}\n", .{.red}), .{archive_shasum}) catch {};
+            return;
+        }
     }
 
     std.log.debug("unarchiving {s} to {s}", .{ filename, zvm_cache_temp_target });
