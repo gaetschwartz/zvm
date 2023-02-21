@@ -152,8 +152,8 @@ pub fn install_cmd(ctx: RunContext) !void {
         try utils.Shasum256.compute(file.reader(), &archive_shasum);
         if (!std.mem.eql(u8, &archive_shasum, archive.shasum)) {
             stderr.print(ansi.style("error: shasum mismatch for {s}\n", .{ .red, .bold }), .{archive.tarball}) catch {};
-            stderr.print(ansi.style("expected: {s}\n", .{.red}), .{archive.shasum}) catch {};
-            stderr.print(ansi.style("got: {s}\n", .{.red}), .{archive_shasum}) catch {};
+            stderr.print(ansi.style("  expected: {s}\n", .{.red}), .{archive.shasum}) catch {};
+            stderr.print(ansi.style("  got: {s}\n", .{.red}), .{archive_shasum}) catch {};
             return;
         }
     } else {
