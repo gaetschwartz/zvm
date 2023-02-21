@@ -3,17 +3,14 @@ const builtin = @import("builtin");
 const ansi = @import("ansi");
 const testing = std.testing;
 
-pub fn Tuple2(comptime T1: type, comptime T2: type) type {
-    return struct {
-        t1: T1,
-        t2: T2,
-    };
+pub fn Pair(comptime T1: type, comptime T2: type) type {
+    return struct { t1: T1, t2: T2 };
 }
 
 pub const ParsedArgs = struct {
-    positionals: std.ArrayList(Tuple2(Command.Positional, []const u8)),
-    flags: std.StringArrayHashMap(Tuple2(Command.Flag, usize)),
-    options: std.StringArrayHashMap(Tuple2(Command.Option, []const u8)),
+    positionals: std.ArrayList(Pair(Command.Positional, []const u8)),
+    flags: std.StringArrayHashMap(Pair(Command.Flag, usize)),
+    options: std.StringArrayHashMap(Pair(Command.Option, []const u8)),
     additional_flags: std.StringArrayHashMap(usize),
     additional_options: std.StringArrayHashMap([]const u8),
     additional_positionals: std.ArrayList([]const u8),
@@ -61,9 +58,9 @@ pub const ParsedArgs = struct {
     }
 
     pub fn parseArgs(allocator: std.mem.Allocator, args: [][]const u8, command: *Command) !ParsedArgs {
-        var positionals = std.ArrayList(Tuple2(Command.Positional, []const u8)).init(allocator);
-        var flags = std.StringArrayHashMap(Tuple2(Command.Flag, usize)).init(allocator);
-        var options = std.StringArrayHashMap(Tuple2(Command.Option, []const u8)).init(allocator);
+        var positionals = std.ArrayList(Pair(Command.Positional, []const u8)).init(allocator);
+        var flags = std.StringArrayHashMap(Pair(Command.Flag, usize)).init(allocator);
+        var options = std.StringArrayHashMap(Pair(Command.Option, []const u8)).init(allocator);
         var additional_flags = std.StringArrayHashMap(usize).init(allocator);
         var additional_options = std.StringArrayHashMap([]const u8).init(allocator);
         var additional_positionals = std.ArrayList([]const u8).init(allocator);
@@ -187,10 +184,9 @@ pub const ParsedArgs = struct {
             stderr.print(ansi.style("Missing required option: " ++ ansi.bold("{s}\n"), .red), .{option.long_name.?}) catch {};
             std.os.exit(1);
         }
-        var i: usize = 0;
         var hasSeenOptional = false;
-        while (i < command.positionals.len) : (i += 1) {
-            const positional = command.positionals[i];
+
+        for (command.positionals) |positional, i| {
             if (positional.optional) {
                 hasSeenOptional = true;
                 continue;
@@ -252,9 +248,8 @@ pub const ArgParser = struct {
         command: *Command,
 
         pub fn getPositional(self: RunContext, name: []const u8) ?[]const u8 {
-            var i: usize = 0;
-            while (i < self.command.positionals.len) : (i += 1) {
-                if (std.mem.eql(u8, self.command.positionals[i].name, name)) {
+            for (self.command.positionals) |positional, i| {
+                if (std.mem.eql(u8, positional.name, name)) {
                     // if out of bounds, return null
                     if (self.args.positionals.items.len <= i) return null;
                     return self.args.positionals.items[i].t2;

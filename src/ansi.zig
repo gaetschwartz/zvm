@@ -114,35 +114,18 @@ pub fn blink(comptime text: []const u8) []const u8 {
     return c(.BLINK) ++ text ++ c(.RESET);
 }
 
-fn lowerCase(comptime text: []const u8) []const u8 {
-    var out: [text.len]u8 = undefined;
-    var i: usize = 0;
-    while (i < text.len) : (i += 1) {
-        out[i] = std.ascii.toLower(text[i]);
-    }
-    return out[0..];
-}
-
 fn upperCase(comptime text: []const u8) []const u8 {
     var out: [text.len]u8 = undefined;
-    var i: usize = 0;
-    while (i < text.len) : (i += 1) {
-        out[i] = std.ascii.toUpper(text[i]);
+    for (text) |char, i| {
+        out[i] = std.ascii.toUpper(char);
     }
     return out[0..];
 }
 
-fn lowerCaseFirst(comptime text: []const u8) []const u8 {
-    var out: [text.len]u8 = undefined;
-    var i: usize = 0;
-    while (i < text.len) : (i += 1) {
-        if (i == 0) {
-            out[i] = std.ascii.toLower(text[i]);
-        } else {
-            out[i] = text[i];
-        }
-    }
-    return out[0..];
+test "upperCase" {
+    const text = "hello";
+    const upper = upperCase(text);
+    try std.testing.expectEqualStrings(upper, "HELLO");
 }
 
 test "all colors can be resolved" {
