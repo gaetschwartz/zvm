@@ -23,6 +23,8 @@ pub fn install_cmd(ctx: RunContext) !void {
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
 
+    const force = ctx.args.hasFlag("force");
+
     const target_nullable = ctx.getPositional("version");
     if (target_nullable == null) {
         std.log.err("No channel provided\n", .{});
@@ -79,7 +81,6 @@ pub fn install_cmd(ctx: RunContext) !void {
             if (err == error.FileNotFound) break :blk;
             return err;
         };
-        const force = ctx.args.hasFlag("force");
         if (force) {
             std.log.debug("force flag is set, removing old version", .{});
         }
@@ -144,7 +145,7 @@ pub fn install_cmd(ctx: RunContext) !void {
         });
     }
     // Check the sha256sum of the archive
-    {
+    if (!force) {
         var archive_shasum: [utils.Shasum256.digest_length_hex]u8 = undefined;
         var file = try std.fs.openFileAbsolute(cache_path, .{});
         defer file.close();
@@ -155,6 +156,8 @@ pub fn install_cmd(ctx: RunContext) !void {
             stderr.print(ansi.style("got: {s}\n", .{.red}), .{archive_shasum}) catch {};
             return;
         }
+    } else {
+        std.log.debug("force flag is set, skipping shasum check", .{});
     }
 
     std.log.debug("unarchiving {s} to {s}", .{ filename, zvm_cache_temp_target });
