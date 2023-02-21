@@ -135,7 +135,7 @@ pub const ParsedArgs = struct {
                             try additional_options.put(.{ .short = arg[1] }, value);
                         }
                     } else {
-                        return error.InvalidOption;
+                        // ignore it
                     }
                 }
                 // if there are multiple flags like so: -abc
