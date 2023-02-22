@@ -217,7 +217,7 @@ pub const ParsedArgs = struct {
         }
         var hasSeenOptional = false;
 
-        for (command.positionals) |positional, i| {
+        for (command.positionals, 0..) |positional, i| {
             if (positional.optional) {
                 hasSeenOptional = true;
                 continue;
@@ -279,7 +279,7 @@ pub const ArgParser = struct {
         command: *Command,
 
         pub fn getPositional(self: RunContext, name: []const u8) ?[]const u8 {
-            for (self.command.positionals) |positional, i| {
+            for (self.command.positionals, 0..) |positional, i| {
                 if (std.mem.eql(u8, positional.name, name)) {
                     // if out of bounds, return null
                     if (self.args.positionals.items.len <= i) return null;

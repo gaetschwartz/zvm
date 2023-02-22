@@ -116,7 +116,7 @@ pub fn blink(comptime text: []const u8) []const u8 {
 
 fn upperCase(comptime text: []const u8) []const u8 {
     var out: [text.len]u8 = undefined;
-    for (text) |char, i| {
+    for (text, 0..) |char, i| {
         out[i] = std.ascii.toUpper(char);
     }
     return out[0..];
