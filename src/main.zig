@@ -9,6 +9,7 @@ const build_options = @import("zvm_build_options");
 const builtin = @import("builtin");
 const ansi = @import("ansi");
 const createParser = @import("parser.zig").createParser;
+const windows = @import("os/windows.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -17,13 +18,26 @@ pub fn main() !void {
     // parse args
     var parser = try createParser(allocator);
     defer parser.deinit();
+    const stderr = std.io.getStdErr().writer();
 
     if (builtin.os.tag == .windows) {
-        if (std.os.windows.kernel32.SetConsoleOutputCP(65001) != 0) {
+        const enabled = windows.isDeveloperModeEnabled();
+        if (!enabled) {
+            try stderr.print(ansi.style("You are on Windows, but developer mode does not seem to be enabled. Please enable developer mode to use Zvm.\n", .{.yellow}), .{});
+            try stderr.print(ansi.style("More information can be found here: https://docs.microsoft.com/en-us/windows/uwp/get-started/enable-your-device-for-development\n", .{ .yellow, .fade }), .{});
+
+            std.os.exit(0);
+        } else {
+            std.log.debug("Developer mode is enabled", .{});
+        }
+
+        if (windows.SetConsoleOutputCP(.utf8)) {
             std.log.debug("Set console output code page to UTF-8", .{});
         } else {
-            std.log.debug("Failed to set console output code page to UTF-8", .{});
+            const lastError = std.os.windows.kernel32.GetLastError();
+            std.log.debug("Failed to set console output code page to UTF-8 with error code {s}", .{@tagName(lastError)});
         }
+        // check developer mode
     }
 
     var iter = try std.process.argsWithAllocator(allocator);
@@ -31,7 +45,9 @@ pub fn main() !void {
     try parser.parseArgv(&iter);
 
     parser.run() catch |err| {
-        const stderr = std.io.getStdErr().writer();
+        if (builtin.mode == .Debug) {
+            return err;
+        }
         try stderr.print("Zvm encountered an error while running " ++ ansi.c(.bold), .{});
         var args = try std.process.argsWithAllocator(std.heap.page_allocator);
         defer args.deinit();
@@ -73,7 +89,7 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         \\                                                                       
     ;
 
-    try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windowsHasChcp65001()) zvmComplex else zvmSimple});
+    try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windows.IsConsoleOutputCP(.utf8)) zvmComplex else zvmSimple});
 
     if (version) {
         const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.blue) ++ ansi.c(.BOLD);
@@ -95,10 +111,4 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         .show_flags = false,
         .show_options = false,
     });
-}
-
-inline fn windowsHasChcp65001() bool {
-    const chcp = std.os.windows.kernel32.GetConsoleOutputCP();
-    std.log.debug("chcp: {d}", .{chcp});
-    return chcp == 65001;
 }

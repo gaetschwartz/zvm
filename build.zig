@@ -65,16 +65,16 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const completion_cmd = b.addExecutable(.{
-        .name = "complete",
-        .root_source_file = .{ .path = "src/complete.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    completion_cmd.addModule("ansi", ansi);
-    completion_cmd.addModule("known-folders", knownFolders);
-    completion_cmd.addOptions("zvm_build_options", options);
-    completion_cmd.install();
+    // const completion_cmd = b.addExecutable(.{
+    //     .name = "complete",
+    //     .root_source_file = .{ .path = "src/complete.zig" },
+    //     .target = target,
+    //     .optimize = optimize,
+    // });
+    // completion_cmd.addModule("ansi", ansi);
+    // completion_cmd.addModule("known-folders", knownFolders);
+    // completion_cmd.addOptions("zvm_build_options", options);
+    // completion_cmd.install();
 
     const test_step = b.step("test", "Run unit tests");
     const arg_parser_test = registerTest(b, test_step, .{
