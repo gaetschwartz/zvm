@@ -150,7 +150,7 @@ pub const ParsedArgs = struct {
                             try addOrIncrementAddiFlag(&additional_flags, .{ .short = arg[i] });
                         }
                     }
-                } else {
+                } else if (arg.len == 2) {
                     // if it's a single character flag like "-f".
                     // in this case we must check if it is a flag or an option
                     // if it's an option, then the next argument is the value
@@ -309,7 +309,7 @@ pub const ArgParser = struct {
                 break;
             }
             if (builtin.mode == .Debug) {
-                std.debug.print("Commands at depth {d} of {s}:\n", .{ depth, command.name });
+                std.debug.print("{d} commands at depth {d} of {s}:\n", .{ command.commands.items.len, depth, command.name });
                 for (command.commands.items) |c| {
                     std.debug.print("  {s}", .{c.name});
                 }
@@ -320,8 +320,10 @@ pub const ArgParser = struct {
                     std.log.debug("Found command: {s} at depth {d}", .{ command_name, depth });
                     command = c;
                     depth += 1;
+                    continue;
                 }
             }
+            break;
         }
         var parsed_args = ParsedArgs.parseArgs(
             self.allocator,
@@ -331,6 +333,8 @@ pub const ArgParser = struct {
             std.io.getStdErr().writer().print("Error parsing arguments: {any}\n", .{err}) catch {};
             std.os.exit(1);
         };
+        defer parsed_args.deinit();
+
         if (command.add_help) {
             if (parsed_args.additional_flags.contains(.{ .short = 'h' }) or
                 parsed_args.additional_flags.contains(.{ .long = "help" }))
@@ -352,7 +356,6 @@ pub const ArgParser = struct {
         }
         // check for missing required options
         try parsed_args.check(command);
-        defer parsed_args.deinit();
         const context = RunContext{
             .args = &parsed_args,
             .depth = 1,
@@ -803,24 +806,72 @@ const TestUnion = union(enum) {
     c: u32,
 };
 
-test "ArrayHashMap" {
-    var alloc = std.testing.allocator;
-    var map = StructArrayHashMap(TestUnion, u8).init(alloc);
-    defer map.deinit();
+const MAX_ARGS_COUNT = 32;
+const MAX_ARG_LEN = 64;
+const ITERATIONS = 1000;
 
-    const a = TestUnion{ .a = 1 };
-    const b = TestUnion{ .b = 2 };
-    const c = TestUnion{ .c = 3 };
+fn no_op_handler(ctx: ArgParser.RunContext) !void {
+    _ = ctx;
+}
 
-    try map.put(a, 1);
-    try std.testing.expectEqual(map.get(a), 1);
-    try map.put(b, 2);
-    try std.testing.expectEqual(map.get(a), 1);
-    try std.testing.expectEqual(map.get(b), 2);
-    try map.put(c, 3);
-    try std.testing.expectEqual(map.get(a), 1);
-    try std.testing.expectEqual(map.get(b), 2);
-    try std.testing.expectEqual(map.get(c), 3);
-    try map.put(a, 4);
-    try std.testing.expectEqual(map.get(a), 4);
+test "Simple fuzzing of parsing command line arguments" {
+    // parsing should never crash
+    var prng = std.rand.DefaultPrng.init(42069);
+    var random = prng.random();
+
+    var i: usize = 0;
+    while (i < ITERATIONS) : (i += 1) {
+        {
+            var allocator = std.testing.allocator;
+            var parser = ArgParser.init(allocator);
+            defer parser.deinit();
+
+            var root_cmd_name = try std.fmt.allocPrint(allocator, "root", .{});
+
+            // run parser
+            parser.setRootCommand(.{
+                .name = root_cmd_name,
+                .description = "root description",
+                .handler = &no_op_handler,
+            });
+
+            // number of args to generate
+            const num_args = random.intRangeLessThan(u8, 1, MAX_ARGS_COUNT);
+            var args = std.ArrayList([]const u8).init(allocator);
+            defer {
+                for (args.items) |arg| {
+                    allocator.free(arg);
+                }
+                args.deinit();
+            }
+
+            const add_root = random.boolean();
+
+            if (add_root) {
+                try args.append(root_cmd_name);
+            }
+
+            defer {
+                if (!add_root) {
+                    allocator.free(root_cmd_name);
+                }
+            }
+
+            // generate args
+            for (0..num_args) |_| {
+                const arg_len = random.intRangeLessThan(u8, 1, MAX_ARG_LEN);
+                var arg = try allocator.alloc(u8, arg_len);
+                for (0..arg_len) |j| {
+                    arg[j] = random.intRangeLessThan(u8, 20, 127);
+                }
+                try args.append(arg);
+            }
+
+            // parse arg
+            try parser.parse(args.items);
+
+            // run parser
+            try parser.run();
+        }
+    }
 }
