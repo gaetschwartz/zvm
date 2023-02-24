@@ -8,6 +8,8 @@ const BYTE = std.os.windows.BYTE;
 const KEY_READ = std.os.windows.KEY_READ;
 const Win32Error = std.os.windows.Win32Error;
 
+// https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regqueryvalueexw
+// https://github.com/ziglang/zig/pull/14721
 extern "advapi32" fn RegQueryValueExW(
     hKey: std.os.windows.HKEY,
     lpValueName: std.os.windows.LPCWSTR,
