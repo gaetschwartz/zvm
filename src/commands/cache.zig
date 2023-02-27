@@ -47,12 +47,12 @@ pub fn cache_size_cmd(ctx: ArgParser.RunContext) !void {
         else => return err,
     };
 
-    const info = try dirSize(cache_dir, allocator);
+    const info = try dirSize(cache_dir);
     const human_size = HumanSize(f64).compute(@intToFloat(f64, info.size));
     try stdout.print(ansi.style("Total: " ++ ansi.bold("{d}") ++ " files, " ++ ansi.bold("{d:.1} {s}") ++ "\n", .cyan), .{ info.files, human_size.value, human_size.unit });
 }
 
-const CacheInfo = struct {
+pub const DirSizeResult = struct {
     size: u64,
     files: u64,
 };
@@ -62,15 +62,15 @@ inline fn ignoreFile(name: []const u8) bool {
 }
 
 // recuring function to get the size of a directory
-fn dirSize(dir: std.fs.IterableDir, allocator: std.mem.Allocator) !CacheInfo {
-    var total: CacheInfo = .{ .size = 0, .files = 0 };
+pub fn dirSize(dir: std.fs.IterableDir) !DirSizeResult {
+    var total: DirSizeResult = .{ .size = 0, .files = 0 };
     var iter = dir.iterate();
     while (try iter.next()) |entry| {
         switch (entry.kind) {
             .Directory => {
                 var sub_dir = try dir.dir.openIterableDir(entry.name, .{});
                 defer sub_dir.close();
-                const info = try dirSize(sub_dir, allocator);
+                const info = try dirSize(sub_dir);
                 total = .{
                     .size = total.size + info.size,
                     .files = total.files + info.files,
