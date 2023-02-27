@@ -92,7 +92,7 @@ def main(forumla: str, overwrite_path: Optional[str] = None):
     with open(formula_path, "r") as f:
         content = f.read()
         # replace the regex to find : 'url "https://github.com/gaetschwartz/zvm/archive/<version>.tar.gz"'
-        url_fmt = "https:/github.com/gaetschwartz/zvm/archive/{}.tar.gz"
+        url_fmt = "https:/github.com/gaetschwartz/zvm/archive/v{}.tar.gz"
         old_url = url_fmt.format(current)
         new_url = url_fmt.format(latest)
         old_hash = hash_for_url(old_url)
