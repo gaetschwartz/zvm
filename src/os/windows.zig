@@ -91,7 +91,11 @@ test "isDeveloperModeEnabled" {
         return;
     }
     const result = isDeveloperModeEnabled();
-    std.log.debug("isDeveloperModeEnabled returned {}", .{result});
+    if (result) {
+        std.debug.print("Developer mode is enabled\n", .{});
+    } else {
+        std.debug.print("Developer mode is not enabled\n", .{});
+    }
 }
 
 test "ConsoleOutputCP" {
@@ -99,11 +103,9 @@ test "ConsoleOutputCP" {
         return;
     }
     const cp1 = GetConsoleOutputCP();
-    std.log.debug("GetConsoleOutputCP returned {}", .{cp1});
     const result = SetConsoleOutputCP(.utf8);
     try testing.expect(result);
     const cp2 = GetConsoleOutputCP();
-    std.log.debug("GetConsoleOutputCP returned {}", .{cp2});
     try testing.expect(cp2 == @enumToInt(CodePageIdentifier.utf8));
 
     // set an invalid code page
@@ -111,9 +113,8 @@ test "ConsoleOutputCP" {
     try testing.expect(!resul3);
     const errorCode = std.os.windows.kernel32.GetLastError();
     try testing.expectEqual(errorCode, Win32Error.INVALID_PARAMETER);
-    std.debug.print("SetConsoleOutputCP failed with error code {s}\n", .{@tagName(errorCode)});
 
     // set it back to the original code page
-    const result3 = SetConsoleOutputCP(.utf8);
+    const result3 = SetConsoleOutputCPImpl(cp1);
     try testing.expect(result3);
 }

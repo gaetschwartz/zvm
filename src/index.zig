@@ -60,7 +60,7 @@ pub fn fetchIndex(allocator: std.mem.Allocator) anyerror!Index {
 
 const Value = std.json.Value;
 
-fn parseTree(allocator: std.mem.Allocator, tree: *const Value) anyerror!Index {
+fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
     var arr = std.ArrayList(Release).init(allocator);
     // iterate over the keys of the root object
     if (tree.* != Value.Object) return error.InvalidJson;
@@ -146,9 +146,20 @@ test "parse 2023-02-08.json" {
 
     // std.log.debug("index:", .{});
     // tree.root.dump();
-    var result = try parseTree(std.testing.allocator, &tree.root);
-    for (result.releases.items) |item| {
-        dumpRelease(item);
+    var parsed = try parseTree(std.testing.allocator, &tree.root);
+    defer parsed.deinit();
+
+    // look for the "master" release
+    var master: ?Release = null;
+    for (parsed.releases.items) |release| {
+        if (std.mem.eql(u8, release.channel, "master")) {
+            // only one master release
+            try std.testing.expect(master == null);
+            master = release;
+        }
     }
-    defer result.deinit();
+    try std.testing.expect(master != null);
+    try std.testing.expectEqualStrings("master", master.?.channel);
+    try std.testing.expectEqualStrings("0.11.0-dev.1580+a5b34a61a", master.?.version);
+    try std.testing.expectEqualStrings("2023-02-06", master.?.date);
 }

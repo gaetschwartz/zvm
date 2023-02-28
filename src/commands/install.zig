@@ -67,12 +67,13 @@ pub fn install_cmd(ctx: RunContext) !void {
     const temp_name = try std.fmt.allocPrint(allocator, "{x}", .{std.time.milliTimestamp()});
     const zvm_cache_temp_target = try std.fs.path.join(allocator, &[_][]const u8{ zvm_cache_temp, temp_name });
 
-    try utils.makeDirAbsolutePermissive(zvm);
-    try utils.makeDirAbsolutePermissive(zvm_versions);
-    try utils.makeDirAbsolutePermissive(zvm_cache);
-    try utils.makeDirAbsolutePermissive(zvm_cache_web);
-    try utils.makeDirAbsolutePermissive(zvm_cache_temp);
-    try utils.makeDirAbsolutePermissive(zvm_cache_temp_target);
+    const cwd = std.fs.cwd();
+    // try cwd.makePath(zvm);
+    try cwd.makePath(zvm_versions);
+    // try cwd.makePath(zvm_cache);
+    try cwd.makePath(zvm_cache_web);
+    try cwd.makePath(zvm_cache_temp);
+    try cwd.makePath(zvm_cache_temp_target);
 
     const version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm_versions, target });
     const version_info_path = try std.fs.path.join(allocator, &[_][]const u8{ version_path, ".zvm.json" });
@@ -170,9 +171,11 @@ pub fn install_cmd(ctx: RunContext) !void {
         .@"tar.xz" => {
             try unarchiveTarXz(cache_path, zvm_cache_temp_target, allocator);
         },
-        .Unknown => {
-            std.log.debug("unknown archive type of {s}", .{std.fs.path.basename(filename)});
-            return;
+        .unknown => {
+            try stderr.print("Warning: unknown archive type: {s}\n", .{filename});
+            try stderr.print(ansi.fade("Assuming tar.xz...\n"), .{});
+
+            try unarchiveTarXz(cache_path, zvm_cache_temp_target, allocator);
         },
     }
     std.log.debug("Unarchiving complete", .{});

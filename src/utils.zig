@@ -4,10 +4,8 @@ const builtin = @import("builtin");
 const math = std.math;
 
 pub fn zvmDir(allocator: std.mem.Allocator) ![]const u8 {
-    const home = try known.getPath(allocator, .home) orelse {
-        std.log.err(" could not find home directory\n", .{});
-        return error.CouldNotFindHomeDirectory;
-    };
+    const home = try known.getPath(allocator, .home) orelse
+        return error.UnableToFindHomeDirectory;
     defer allocator.free(home);
     std.log.debug("home: {s}", .{home});
     return try std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm" });
@@ -16,53 +14,34 @@ pub fn zvmDir(allocator: std.mem.Allocator) ![]const u8 {
 const ArchiveType = enum {
     zip,
     @"tar.xz",
-    Unknown,
-
-    pub fn componentCount(self: ArchiveType) usize {
-        return switch (self) {
-            .zip => @intCast(usize, 1),
-            .@"tar.xz" => @intCast(usize, 2),
-            .Unknown => @intCast(usize, 0),
-        };
-    }
+    unknown,
 };
-
-pub fn stripExtension(path: []const u8, archive_type: ArchiveType) []const u8 {
-    const ext_count = archive_type.componentCount();
-    var i = std.mem.lastIndexOf(u8, path, ".");
-    if (i == null) {
-        return path;
-    }
-    var count: usize = 1;
-    while (count < ext_count) {
-        i = std.mem.lastIndexOf(u8, path[0..i.?], ".");
-        if (i == null) {
-            return path;
-        }
-        count += 1;
-    }
-    return path[0..i.?];
-}
 
 pub fn archiveType(path: []const u8) ArchiveType {
     var iter = std.mem.splitBackwards(u8, path, ".");
-    const last1 = iter.next() orelse return ArchiveType.Unknown;
-    const last2 = iter.next() orelse return ArchiveType.Unknown;
+    const last1 = iter.next() orelse return .unknown;
+    //? It's safe to return here because we know that there should be at least one dot in the path
+    //? thus two components.
+    const last2 = iter.next() orelse return .unknown;
+
     if (std.mem.eql(u8, last1, "zip")) {
-        return ArchiveType.zip;
+        return .zip;
     } else if (std.mem.eql(u8, last2, "tar") and std.mem.eql(u8, last1, "xz")) {
-        return ArchiveType.@"tar.xz";
+        return .@"tar.xz";
     } else {
-        std.log.debug("Unknown archive type: [{s}, {s}]\n", .{ last2, last1 });
-        return ArchiveType.Unknown;
+        return .unknown;
     }
 }
 
-pub fn makeDirAbsolutePermissive(absolute_path: []const u8) !void {
-    std.fs.makeDirAbsolute(absolute_path) catch |err| switch (err) {
-        std.os.MakeDirError.PathAlreadyExists => {},
-        else => return err,
-    };
+test "archive type" {
+    try std.testing.expectEqual(ArchiveType.zip, archiveType("foo.zip"));
+    try std.testing.expectEqual(ArchiveType.@"tar.xz", archiveType("foo.tar.xz"));
+    try std.testing.expectEqual(ArchiveType.unknown, archiveType("foo"));
+    try std.testing.expectEqual(ArchiveType.unknown, archiveType("foo.bar"));
+    try std.testing.expectEqual(ArchiveType.unknown, archiveType("foo.bar.baz"));
+    try std.testing.expectEqual(ArchiveType.@"tar.xz", archiveType("is.this.a.zip.or.a.tar.xz"));
+    try std.testing.expectEqual(ArchiveType.zip, archiveType("its.defo.a.tar.xz.zip"));
+    try std.testing.expectEqual(ArchiveType.unknown, archiveType("among.us.zip.."));
 }
 
 const HumanSizes = enum {
@@ -102,38 +81,37 @@ pub fn HumanSize(comptime T: type) type {
     };
 }
 
-const isDebugMode = builtin.mode == .Debug;
-
-pub fn ArrayListPointers(comptime T: type) type {
-    return struct {
-        const Self = @This();
-        array: std.ArrayList(*T),
-        allocator: std.mem.Allocator,
-
-        pub fn init(allocator: std.mem.Allocator) Self {
-            return ArrayListPointers(T){
-                .array = std.ArrayList(*T).init(allocator),
-                .allocator = allocator,
-            };
-        }
-
-        pub fn deinit(self: *ArrayListPointers(T), allocator: *std.mem.Allocator) void {
-            for (self.array.items) |item| {
-                allocator.destroy(item);
-            }
-            self.array.deinit();
-        }
-
-        pub fn append(self: *ArrayListPointers(T), item: T) !void {
-            const p = try self.allocator.create(T);
-            p.* = item;
-            try self.array.append(p);
-        }
-
-        pub fn items(self: *ArrayListPointers(T)) []*T {
-            return self.array.items;
-        }
+test "human size" {
+    const cases = [_]struct {
+        size: u64,
+        expected: HumanSize(u64),
+    }{
+        .{ .size = 0, .expected = HumanSize(u64){ .value = 0, .unit = "B" } },
+        .{ .size = 1, .expected = HumanSize(u64){ .value = 1, .unit = "B" } },
+        .{ .size = 1023, .expected = HumanSize(u64){ .value = 1023, .unit = "B" } },
+        .{ .size = 1024, .expected = HumanSize(u64){ .value = 1, .unit = "KB" } },
+        .{ .size = 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "KB" } },
+        .{ .size = 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "MB" } },
+        .{ .size = 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "MB" } },
+        .{ .size = 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "GB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "GB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "TB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "TB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "PB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "PB" } },
     };
+    for (cases) |c| {
+        const actual = HumanSize(u64).compute(c.size);
+        expectHumanSize(c.expected, actual) catch |err| {
+            std.debug.print("expected: {d} {s}, actual: {d} {s}\n", .{ c.expected.value, c.expected.unit, actual.value, actual.unit });
+            return err;
+        };
+    }
+}
+
+fn expectHumanSize(expected: HumanSize(u64), actual: HumanSize(u64)) !void {
+    try std.testing.expectEqual(expected.value, actual.value);
+    try std.testing.expectEqualStrings(expected.unit, actual.unit);
 }
 
 pub const Shasum256 = struct {
@@ -174,37 +152,4 @@ test "shasum" {
     buffer = std.io.fixedBufferStream("");
     try Shasum256.compute(buffer.reader(), &out_buffer);
     try std.testing.expectEqualStrings("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", out_buffer[0..]);
-}
-
-test "human size" {
-    const cases = [_]struct {
-        size: u64,
-        expected: HumanSize(u64),
-    }{
-        .{ .size = 0, .expected = HumanSize(u64){ .value = 0, .unit = "B" } },
-        .{ .size = 1, .expected = HumanSize(u64){ .value = 1, .unit = "B" } },
-        .{ .size = 1023, .expected = HumanSize(u64){ .value = 1023, .unit = "B" } },
-        .{ .size = 1024, .expected = HumanSize(u64){ .value = 1, .unit = "KB" } },
-        .{ .size = 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "KB" } },
-        .{ .size = 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "MB" } },
-        .{ .size = 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "MB" } },
-        .{ .size = 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "GB" } },
-        .{ .size = 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "GB" } },
-        .{ .size = 1024 * 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "TB" } },
-        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "TB" } },
-        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024, .expected = HumanSize(u64){ .value = 1, .unit = "PB" } },
-        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(u64){ .value = 1023, .unit = "PB" } },
-    };
-    for (cases) |c| {
-        const actual = HumanSize(u64).compute(c.size);
-        expectHumanSize(c.expected, actual) catch |err| {
-            std.debug.print("expected: {d} {s}, actual: {d} {s}\n", .{ c.expected.value, c.expected.unit, actual.value, actual.unit });
-            return err;
-        };
-    }
-}
-
-fn expectHumanSize(expected: HumanSize(u64), actual: HumanSize(u64)) !void {
-    try std.testing.expectEqual(expected.value, actual.value);
-    try std.testing.expectEqualStrings(expected.unit, actual.unit);
 }

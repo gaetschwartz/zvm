@@ -77,7 +77,7 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     try stdout.print("{s}\n", .{if (builtin.os.tag != .windows or windows.IsConsoleOutputCP(.utf8)) zvmComplex else zvmSimple});
 
     if (version) {
-        const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.blue) ++ ansi.c(.BOLD);
+        const start = comptime "  " ++ ansi.fade("-") ++ ansi.c(.{ .blue, .bold });
         const end = comptime ansi.c(.reset) ++ "\n";
         const rstBold = comptime ansi.c(.reset_bold);
         _ = try stdout.write(start ++ " version      " ++ rstBold ++ (build_options.version) ++ end);
