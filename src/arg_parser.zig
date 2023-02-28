@@ -245,13 +245,13 @@ pub const ArgParser = struct {
         };
     }
 
-    pub fn parseArgv(self: *ArgParser, iter: *std.process.ArgIterator) !void {
+    pub fn registerArgsFromIterator(self: *ArgParser, iter: *std.process.ArgIterator) !void {
         while (iter.next()) |arg| {
             try self.args.append(arg);
         }
     }
 
-    pub fn parse(self: *ArgParser, args: []const []const u8) !void {
+    pub fn registerArgs(self: *ArgParser, args: []const []const u8) !void {
         try self.args.appendSlice(args);
     }
 
@@ -302,22 +302,26 @@ pub const ArgParser = struct {
     };
 
     pub fn run(self: *ArgParser) !void {
+        if (self.root_command == null) return error.NoRootCommand;
+
         var command = &self.root_command.?;
         var depth: usize = 0;
+        const stderr = std.io.getStdErr().writer();
+
         for (self.args.items[1..]) |command_name| {
             if (std.mem.startsWith(u8, command_name, "-")) {
                 break;
             }
-            if (builtin.mode == .Debug) {
-                std.debug.print("{d} commands at depth {d} of {s}:\n", .{ command.commands.items.len, depth, command.name });
-                for (command.commands.items) |c| {
-                    std.debug.print("  {s}", .{c.name});
-                }
-                std.debug.print("\n", .{});
-            }
+            // if (builtin.mode == .Debug) {
+            //     std.debug.print("{d} commands at depth {d} of {s}:\n", .{ command.commands.items.len, depth, command.name });
+            //     for (command.commands.items) |c| {
+            //         std.debug.print("  {s}", .{c.name});
+            //     }
+            //     std.debug.print("\n", .{});
+            // }
             for (command.commands.items) |c| {
                 if (std.mem.eql(u8, c.name, command_name)) {
-                    std.log.debug("Found command: {s} at depth {d}", .{ command_name, depth });
+                    // std.log.debug("Found command: {s} at depth {d}", .{ command_name, depth });
                     command = c;
                     depth += 1;
                     continue;
@@ -330,26 +334,25 @@ pub const ArgParser = struct {
             self.args.items[depth + 1 ..],
             command,
         ) catch |err| {
-            std.io.getStdErr().writer().print("Error parsing arguments: {any}\n", .{err}) catch {};
+            stderr.print("Error parsing arguments: {any}\n", .{err}) catch {};
             std.os.exit(1);
         };
         defer parsed_args.deinit();
 
-        if (command.add_help) {
-            if (parsed_args.additional_flags.contains(.{ .short = 'h' }) or
-                parsed_args.additional_flags.contains(.{ .long = "help" }))
-            {
-                command.printHelp(std.io.getStdOut().writer()) catch |err| {
-                    std.io.getStdErr().writer().print("Error printing help: {any}\n", .{err}) catch {};
-                    std.os.exit(1);
-                };
-                return;
-            }
+        if (command.add_help and
+            (parsed_args.additional_flags.contains(.{ .short = 'h' }) or parsed_args.additional_flags.contains(.{ .long = "help" })))
+        {
+            command.printHelp(std.io.getStdOut().writer()) catch |err| {
+                stderr.print("Error printing help: {any}\n", .{err}) catch {};
+                std.os.exit(1);
+            };
+            return;
         }
+
         if (command.handler == null) {
             std.log.debug("No handler for command: {s}", .{command.name});
             command.printHelp(std.io.getStdOut().writer()) catch |err| {
-                std.io.getStdErr().writer().print("Error printing help: {any}\n", .{err}) catch {};
+                stderr.print("Error printing help: {any}\n", .{err}) catch {};
                 std.os.exit(1);
             };
             return;
@@ -639,7 +642,7 @@ test "parsing sample data" {
     };
     var parser = ArgParser.init(allocator);
     defer parser.deinit();
-    try parser.parse(argv);
+    try parser.registerArgs(argv);
 
     parser.setRootCommand(.{
         .name = "root",
@@ -696,42 +699,6 @@ test "parsing sample data" {
 }
 
 fn handler(ctx: ArgParser.RunContext) !void {
-    // for (ctx.args.options.keys()) |k| {
-    //     std.debug.print("option: {s} = {s}\n", .{ if (k == .short) &[_]u8{k.short} else k.long, (ctx.args.options.get(k) orelse unreachable).t2 });
-    // }
-    // for (ctx.args.flags.keys()) |k| {
-    //     const key = if (k == .short) &[_]u8{k.short} else k.long;
-    //     var alloc = std.testing.allocator;
-    //     const key_str = try std.fmt.allocPrint(alloc, "{s}", .{key});
-    //     defer alloc.free(key_str);
-    //     try testing.expectEqualStrings(key_str, key);
-    //     try testing.expectEqual(key_str.len, key.len);
-    //     const key_hash = blk: {
-    //         var hasher = std.hash.Wyhash.init(0);
-    //         std.hash.autoHashStrat(&hasher, key, .DeepRecursive);
-    //         break :blk @truncate(u32, hasher.final());
-    //     };
-    //     const key_str_hash = blk: {
-    //         var hasher = std.hash.Wyhash.init(0);
-    //         std.hash.autoHashStrat(&hasher, key_str, .DeepRecursive);
-    //         break :blk @truncate(u32, hasher.final());
-    //     };
-    //     try testing.expectEqual(key_hash, key_str_hash);
-    //     const k_hash = blk: {
-    //         var hasher = std.hash.Wyhash.init(0);
-    //         std.hash.autoHashStrat(&hasher, k, .DeepRecursive);
-    //         break :blk @truncate(u32, hasher.final());
-    //     };
-    //     const k2_hash = blk: {
-    //         var hasher = std.hash.Wyhash.init(0);
-    //         const k2: ParsedArgs.ShortOrLong = if (key_str.len == 1) .{ .short = key_str[0] } else .{ .long = key_str };
-    //         std.hash.autoHashStrat(&hasher, k2, .DeepRecursive);
-    //         break :blk @truncate(u32, hasher.final());
-    //     };
-    //     try testing.expectEqual(k_hash, k2_hash);
-    //     std.debug.print("flag: {s} ({}, {})\n", .{ key, ctx.hasFlag(key), ctx.hasFlag(key_str) });
-    // }
-
     try testing.expectEqualStrings(ctx.getPositional("positional").?, "positional_value");
     try testing.expect(ctx.hasFlag("long"));
     try testing.expect(ctx.hasFlag("s"));
@@ -755,7 +722,7 @@ test "parsing " {
     };
     var parser = ArgParser.init(allocator);
     defer parser.deinit();
-    try parser.parse(argv);
+    try parser.registerArgs(argv);
 
     parser.setRootCommand(.{
         .name = "root",
@@ -868,7 +835,7 @@ test "Simple fuzzing of parsing command line arguments" {
             }
 
             // parse arg
-            try parser.parse(args.items);
+            try parser.registerArgs(args.items);
 
             // run parser
             try parser.run();

@@ -8,17 +8,6 @@ const BYTE = std.os.windows.BYTE;
 const KEY_READ = std.os.windows.KEY_READ;
 const Win32Error = std.os.windows.Win32Error;
 
-// https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regqueryvalueexw
-// https://github.com/ziglang/zig/pull/14721
-extern "advapi32" fn RegQueryValueExW(
-    hKey: std.os.windows.HKEY,
-    lpValueName: std.os.windows.LPCWSTR,
-    lpReserved: ?*std.os.windows.DWORD,
-    lpType: ?*std.os.windows.DWORD,
-    lpData: ?*std.os.windows.BYTE,
-    lpcbData: ?*std.os.windows.DWORD,
-) callconv(std.os.windows.WINAPI) std.os.windows.LSTATUS;
-
 pub const CodePageIdentifier = enum(c_uint) {
     utf8 = 65001,
     unknown = 0,
@@ -80,7 +69,7 @@ pub fn isDeveloperModeEnabled() bool {
 
     var lpData: DWORD = undefined;
     var lpcbData: DWORD = @sizeOf(DWORD);
-    const result2 = RegQueryValueExW(
+    const result2 = std.os.windows.advapi32.RegQueryValueExW(
         key,
         lpValueName,
         null,

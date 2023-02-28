@@ -21,28 +21,13 @@ pub fn main() !void {
     const stderr = std.io.getStdErr().writer();
 
     if (builtin.os.tag == .windows) {
-        const enabled = windows.isDeveloperModeEnabled();
-        if (!enabled) {
-            try stderr.print(ansi.style("You are on Windows, but developer mode does not seem to be enabled. Please enable developer mode to use Zvm.\n", .{.yellow}), .{});
-            try stderr.print(ansi.style("More information can be found here: https://docs.microsoft.com/en-us/windows/uwp/get-started/enable-your-device-for-development\n", .{ .yellow, .fade }), .{});
-
-            std.os.exit(0);
-        } else {
-            std.log.debug("Developer mode is enabled", .{});
-        }
-
-        if (windows.SetConsoleOutputCP(.utf8)) {
-            std.log.debug("Set console output code page to UTF-8", .{});
-        } else {
-            const lastError = std.os.windows.kernel32.GetLastError();
-            std.log.debug("Failed to set console output code page to UTF-8 with error code {s}", .{@tagName(lastError)});
-        }
+        try giveWindowsSomeLove();
         // check developer mode
     }
 
     var iter = try std.process.argsWithAllocator(allocator);
     defer iter.deinit();
-    try parser.parseArgv(&iter);
+    try parser.registerArgsFromIterator(&iter);
 
     parser.run() catch |err| {
         if (builtin.mode == .Debug) {
@@ -111,4 +96,22 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         .show_flags = false,
         .show_options = false,
     });
+}
+
+fn giveWindowsSomeLove() !void {
+    const stderr = std.io.getStdErr().writer();
+    const enabled = windows.isDeveloperModeEnabled();
+    if (!enabled) {
+        try stderr.print(ansi.style("You are on Windows, but developer mode does not seem to be enabled. Please enable developer mode to use Zvm.\n", .{.yellow}), .{});
+        try stderr.print(ansi.style("More information can be found here: https://docs.microsoft.com/en-us/windows/uwp/get-started/enable-your-device-for-development\n", .{ .yellow, .fade }), .{});
+    } else {
+        std.log.debug("Developer mode is enabled", .{});
+    }
+
+    if (windows.SetConsoleOutputCP(.utf8)) {
+        std.log.debug("Set console output code page to UTF-8", .{});
+    } else {
+        const lastError = std.os.windows.kernel32.GetLastError();
+        std.log.debug("Failed to set console output code page to UTF-8 with error code {s}", .{@tagName(lastError)});
+    }
 }
