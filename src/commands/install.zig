@@ -405,10 +405,13 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
         const human_rate = utils.HumanSize(f64).compute(rate);
         const progressBarwidth = 50;
         const done = @intToFloat(f64, total_read * progressBarwidth) / @intToFloat(f64, args.total_size);
-        var buf: [progressBarwidth]u8 = undefined;
-        std.mem.set(u8, buf[0..@floatToInt(usize, done)], '#');
-        std.mem.set(u8, buf[@floatToInt(usize, done)..], ' ');
-        try stdout.print(ansi.CLEAR_LINE ++ "|{s}| {d:.0} {s}/s", .{ buf, human_rate.value, human_rate.unit });
+        const blocks = &[_]u16{ ' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█' };
+        var buf: [progressBarwidth]u16 = undefined;
+        const doneInt = @floatToInt(usize, done);
+        std.mem.set(u16, buf[0..if (doneInt == 0) 0 else doneInt - 1], '█');
+        buf[if (doneInt == 0) 0 else doneInt - 1] = blocks[@floatToInt(usize, (done - @intToFloat(f64, doneInt)) * @intToFloat(f64, blocks.len))];
+        std.mem.set(u16, buf[doneInt..], ' ');
+        try stdout.print(ansi.CLEAR_LINE ++ "|{s}| {d:.0} {s}/s", .{ std.unicode.fmtUtf16le(&buf), human_rate.value, human_rate.unit });
         if (read == 0) break;
         _ = try writer.write(temp_buffer[0..read]);
     }
