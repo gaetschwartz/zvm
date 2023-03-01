@@ -407,11 +407,14 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
         const done = @intToFloat(f64, total_read * progressBarwidth) / @intToFloat(f64, args.total_size);
         const blocks = &[_]u16{ ' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█' };
         var buf: [progressBarwidth]u16 = undefined;
-        const doneInt = @floatToInt(usize, done);
-        std.mem.set(u16, buf[0..if (doneInt == 0) 0 else doneInt - 1], '█');
-        buf[if (doneInt == 0) 0 else doneInt - 1] = blocks[@floatToInt(usize, (done - @intToFloat(f64, doneInt)) * @intToFloat(f64, blocks.len))];
-        std.mem.set(u16, buf[doneInt..], ' ');
-        try stdout.print(ansi.CLEAR_LINE ++ "|{s}| {d:.0} {s}/s", .{ std.unicode.fmtUtf16le(&buf), human_rate.value, human_rate.unit });
+        const doneInt = @floatToInt(usize, @floor(done));
+        std.mem.set(u16, buf[0..doneInt], '█');
+        if (doneInt < buf.len) {
+            buf[doneInt] = blocks[@floatToInt(usize, (done - @intToFloat(f64, doneInt)) * @intToFloat(f64, blocks.len))];
+            std.mem.set(u16, buf[doneInt + 1 ..], ' ');
+        }
+        const sep = comptime ansi.fade("|");
+        try stdout.print(ansi.style(ansi.CLEAR_LINE ++ sep ++ "{s}" ++ sep ++ ansi.bold(" {d:.0} {s}/s"), .blue), .{ std.unicode.fmtUtf16le(&buf), human_rate.value, human_rate.unit });
         if (read == 0) break;
         _ = try writer.write(temp_buffer[0..read]);
     }
