@@ -42,9 +42,16 @@ pub const Colors = struct {
     pub const BG_RESET = "\x1b[49m";
     pub const ITALIC = "\x1b[3m";
     pub const BLINK = "\x1b[5m";
-    pub const UNDERLINE = "\x1b[4m";
     pub const REVERSE = "\x1b[7m";
+    pub const UNDERLINE = "\x1b[4m";
 };
+
+// clear current line using ansi escape sequence
+pub const CLEAR_LINE_ONLY = "\x1b[2K";
+// SET CURSOR TO 0
+pub const CURSOR_TO_0 = "\x1b[0G";
+pub const CLEAR_LINE = CURSOR_TO_0 ++ CLEAR_LINE_ONLY;
+
 /// Accepts an enum literal representing a color or a struct with enum literals as fields.
 pub fn c(comptime colors: anytype) []const u8 {
     const type_info = @typeInfo(@TypeOf(colors));

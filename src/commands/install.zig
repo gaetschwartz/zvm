@@ -378,11 +378,6 @@ fn unarchiveTarXz(path: []const u8, dest: []const u8, allocator: std.mem.Allocat
     };
 }
 
-// clear current line using ansi escape sequence
-const CLEAR_LINE = "\x1b[2K";
-// SET CURSOR TO 0
-const CURSOR_TO_0 = "\x1b[0G";
-
 pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     const stdout = std.io.getStdOut().writer();
     const total_human = utils.HumanSize(f64).compute(@intToFloat(f64, args.total_size));
@@ -400,21 +395,25 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     var temp_buffer: [32 * 1024]u8 = undefined;
     // current time
     var now = std.time.milliTimestamp();
+
     while (true) {
         const read: usize = try req.read(&temp_buffer);
         total_read += read;
 
-        const percent = (total_read * 100) / args.total_size;
         const elapsed: i64 = std.time.milliTimestamp() - now;
         const rate = @intToFloat(f64, 1000 * total_read) / @intToFloat(f64, elapsed);
-        const human = utils.HumanSize(f64).compute(rate);
-        const read_human = utils.HumanSize(f64).compute(@intToFloat(f64, total_read));
-        try stdout.print(CLEAR_LINE ++ CURSOR_TO_0 ++ "[{d}%] {d:.2} {s} / {d:.2} {s} | {d:.0} {s}/s", .{ percent, read_human.value, read_human.unit, total_human.value, total_human.unit, human.value, human.unit });
+        const human_rate = utils.HumanSize(f64).compute(rate);
+        const progressBarwidth = 50;
+        const done = @intToFloat(f64, total_read * progressBarwidth) / @intToFloat(f64, args.total_size);
+        var buf: [progressBarwidth]u8 = undefined;
+        std.mem.set(u8, buf[0..@floatToInt(usize, done)], '#');
+        std.mem.set(u8, buf[@floatToInt(usize, done)..], ' ');
+        try stdout.print(ansi.CLEAR_LINE ++ "|{s}| {d:.0} {s}/s", .{ buf, human_rate.value, human_rate.unit });
         if (read == 0) break;
         _ = try writer.write(temp_buffer[0..read]);
     }
     const d = std.time.milliTimestamp() - now;
-    try stdout.print(ansi.style(CLEAR_LINE ++ CURSOR_TO_0 ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @intToFloat(f64, d) / 1000 });
+    try stdout.print(ansi.style(ansi.CLEAR_LINE ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @intToFloat(f64, d) / 1000 });
 
     try file.sync();
 }
