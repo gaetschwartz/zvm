@@ -71,7 +71,11 @@ pub fn HumanSize(comptime T: type) type {
                         .unit = field.name,
                     };
                 }
-                x /= 1024;
+                x = switch (@typeInfo(T)) {
+                    .Int => x >> 10,
+                    .Float => x / 1024.0,
+                    else => @compileError("Unsupported type"),
+                };
             }
             return Self{
                 .value = x,

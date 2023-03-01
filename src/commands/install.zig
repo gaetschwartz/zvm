@@ -138,7 +138,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     } else {
         try stdout.print(ansi.style("Downloading " ++ ansi.bold("{s}") ++ "... ", .blue) ++ ansi.fade("({s})\n"), .{ target, archive.tarball });
 
-        try fetchArchiveChildProcess(.{
+        try fetchArchiveZig(.{
             .url = archive.tarball,
             .path = cache_path,
             .allocator = allocator,
@@ -378,33 +378,26 @@ fn unarchiveTarXz(path: []const u8, dest: []const u8, allocator: std.mem.Allocat
     };
 }
 
+// clear current line using ansi escape sequence
+const CLEAR_LINE = "\x1b[2K";
+// SET CURSOR TO 0
+const CURSOR_TO_0 = "\x1b[0G";
+
 pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
-    const total_human = utils.humanSize(@intCast(i64, args.total_size));
+    const stdout = std.io.getStdOut().writer();
+    const total_human = utils.HumanSize(f64).compute(@intToFloat(f64, args.total_size));
 
     // check if the file exists
-    var file: std.fs.File = blk: {
-        break :blk std.fs.openFileAbsolute(args.path, .{ .mode = .read_write }) catch |err| {
-            std.log.debug("error: {any}\n", .{err});
-            if (err == error.FileNotFound) {
-                // create the file
-                std.log.debug("creating file: {s}\n", .{args.path});
-                break :blk try std.fs.createFileAbsolute(args.path, .{});
-            } else {
-                return err;
-            }
-        };
-    };
+    var file = try std.fs.createFileAbsolute(args.path, .{});
     defer file.close();
     var writer = file.writer();
 
-    var client = std.http.Client{
-        .allocator = args.allocator,
-    };
+    var client = std.http.Client{ .allocator = args.allocator };
     var uri = try std.Uri.parse(args.url);
     var req = try client.request(uri, .{}, .{});
 
     var total_read: usize = 0;
-    var temp_buffer = [_]u8{0} ** 1024;
+    var temp_buffer: [32 * 1024]u8 = undefined;
     // current time
     var now = std.time.milliTimestamp();
     while (true) {
@@ -412,16 +405,18 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
         total_read += read;
 
         const percent = (total_read * 100) / args.total_size;
-        const elapsed = std.time.milliTimestamp() - now;
-        const rate = @divTrunc((@intCast(i64, total_read)), elapsed);
-        const human = utils.humanSize(rate);
-        const read_human = utils.humanSize(@intCast(i64, total_read));
-        std.log.debug("\r{d} {s} / {d} {s} ({d}%) {d} {s}/s", .{ read_human.value, read_human.unit, total_human.value, total_human.unit, percent, human.value, human.unit });
+        const elapsed: i64 = std.time.milliTimestamp() - now;
+        const rate = @intToFloat(f64, 1000 * total_read) / @intToFloat(f64, elapsed);
+        const human = utils.HumanSize(f64).compute(rate);
+        const read_human = utils.HumanSize(f64).compute(@intToFloat(f64, total_read));
+        try stdout.print(CLEAR_LINE ++ CURSOR_TO_0 ++ "[{d}%] {d:.2} {s} / {d:.2} {s} | {d:.0} {s}/s", .{ percent, read_human.value, read_human.unit, total_human.value, total_human.unit, human.value, human.unit });
         if (read == 0) break;
         _ = try writer.write(temp_buffer[0..read]);
     }
+    const d = std.time.milliTimestamp() - now;
+    try stdout.print(ansi.style(CLEAR_LINE ++ CURSOR_TO_0 ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @intToFloat(f64, d) / 1000 });
+
     try file.sync();
-    std.log.debug("\nSuccessfully downloaded {s} to {s} ({d} bytes)\n", .{ args.url, args.path, total_read });
 }
 
 inline fn printArgv(argv: [][]const u8) void {
