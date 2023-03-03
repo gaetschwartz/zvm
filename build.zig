@@ -1,15 +1,18 @@
 const std = @import("std");
-const build_info = @import("build_info.zig");
+const builtin = @import("builtin");
+
+const zvm_version = std.builtin.Version.parse("0.2.11") catch unreachable;
 
 pub fn build(b: *std.Build) void {
-    // Standard target options allows the person running `zig build` to choose
-    // what target to build for. Here we do not override the defaults, which
-    // means any target is allowed, and the default is native. Other options
-    // for restricting supported target set are available.
-    const target = b.standardTargetOptions(.{});
+    comptime {
+        const current_zig = builtin.zig_version;
+        const min_zig = std.SemanticVersion.parse("0.11.0-dev.1817+f6c934677") catch return; // package manager hashes made consistent on windows
+        if (current_zig.order(min_zig) == .lt) {
+            @compileError(std.fmt.comptimePrint("Your Zig version v{} does not meet the minimum build requirement of v{}", .{ current_zig, min_zig }));
+        }
+    }
 
-    // Standard release options allow the person running `zig build` to select
-    // between Debug, ReleaseSafe, ReleaseFast, and ReleaseSmall.
+    const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -28,21 +31,21 @@ pub fn build(b: *std.Build) void {
 
     const branch = gitBranch(allocator);
     options.addOption(?[]const u8, "git_branch", branch);
-    defer {
-        if (branch) |br|
-            allocator.free(br);
-    }
+    defer if (branch) |br| {
+        allocator.free(br);
+    };
 
-    options.addOption([]const u8, "version", build_info.version);
+    const versionString = std.fmt.comptimePrint("{}", .{std.fmt.Formatter(std.builtin.Version.format){ .data = zvm_version }});
+    options.addOption([]const u8, "version", versionString);
 
     const isCi = std.process.getEnvVarOwned(allocator, "CI") catch "false";
-    // defer allocator.free(isCi);
+    defer if (std.process.hasEnvVarConstant("CI")) allocator.free(isCi);
+
     options.addOption([]const u8, "is_ci", isCi);
     options.addOption(?[DATE_SIZE]u8, "build_date", date(allocator) orelse null);
 
-    const knownFolders = b.createModule(.{
-        .source_file = .{ .path = "known-folders/known-folders.zig" },
-    });
+    const known_folders_module = b.dependency("known_folders", .{}).module("known-folders");
+
     const ansi = b.createModule(.{ .source_file = .{ .path = "src/ansi.zig" } });
 
     const zvm = b.addExecutable(.{
@@ -51,7 +54,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    zvm.addModule("known-folders", knownFolders);
+    zvm.addModule("known-folders", known_folders_module);
     zvm.addModule("ansi", ansi);
     zvm.addOptions("zvm_build_options", options);
     zvm.install();
@@ -64,17 +67,6 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-
-    // const completion_cmd = b.addExecutable(.{
-    //     .name = "complete",
-    //     .root_source_file = .{ .path = "src/complete.zig" },
-    //     .target = target,
-    //     .optimize = optimize,
-    // });
-    // completion_cmd.addModule("ansi", ansi);
-    // completion_cmd.addModule("known-folders", knownFolders);
-    // completion_cmd.addOptions("zvm_build_options", options);
-    // completion_cmd.install();
 
     const test_step = b.step("test", "Run unit tests");
     const arg_parser_test = registerTest(b, test_step, .{

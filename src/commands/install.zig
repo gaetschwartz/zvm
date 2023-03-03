@@ -388,38 +388,51 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     var writer = file.writer();
 
     var client = std.http.Client{ .allocator = args.allocator };
+    defer client.deinit();
     var uri = try std.Uri.parse(args.url);
     var req = try client.request(uri, .{}, .{});
+    defer req.deinit();
 
     var total_read: usize = 0;
     var temp_buffer: [32 * 1024]u8 = undefined;
     // current time
-    var now = std.time.milliTimestamp();
+    const start = std.time.milliTimestamp();
+    var last_draw: i64 = 0;
+
+    const progressBarwidth = 50;
+    const progressBarFps = 60;
+    const blocks = &[_]u16{ ' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█' };
 
     while (true) {
         const read: usize = try req.read(&temp_buffer);
         total_read += read;
-
-        const elapsed: i64 = std.time.milliTimestamp() - now;
-        const rate = @intToFloat(f64, 1000 * total_read) / @intToFloat(f64, elapsed);
-        const human_rate = utils.HumanSize(f64).compute(rate);
-        const progressBarwidth = 50;
-        const done = @intToFloat(f64, total_read * progressBarwidth) / @intToFloat(f64, args.total_size);
-        const blocks = &[_]u16{ ' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉', '█' };
-        var buf: [progressBarwidth]u16 = undefined;
-        const doneInt = @floatToInt(usize, @floor(done));
-        std.mem.set(u16, buf[0..doneInt], '█');
-        if (doneInt < buf.len) {
-            buf[doneInt] = blocks[@floatToInt(usize, (done - @intToFloat(f64, doneInt)) * @intToFloat(f64, blocks.len))];
-            std.mem.set(u16, buf[doneInt + 1 ..], ' ');
-        }
-        const sep = comptime ansi.fade("|");
-        try stdout.print(ansi.style(ansi.CLEAR_LINE ++ sep ++ "{s}" ++ sep ++ ansi.bold(" {d:.0} {s}/s"), .blue), .{ std.unicode.fmtUtf16le(&buf), human_rate.value, human_rate.unit });
-        if (read == 0) break;
         _ = try writer.write(temp_buffer[0..read]);
+
+        const now = std.time.milliTimestamp();
+        const elapsed: i64 = now - start;
+        // only draw if 100ms have passed
+        if (elapsed - last_draw >= 1000 / progressBarFps) {
+            last_draw = elapsed;
+            const rate = @intToFloat(f64, 1000 * total_read) / @intToFloat(f64, elapsed);
+            const human_rate = utils.HumanSize(f64).compute(rate);
+
+            const done = @intToFloat(f64, total_read * progressBarwidth) / @intToFloat(f64, args.total_size);
+            var buf: [progressBarwidth]u16 = undefined;
+            const doneInt = @floatToInt(usize, @floor(done));
+            std.mem.set(u16, buf[0..doneInt], '█');
+            if (doneInt < buf.len) {
+                buf[doneInt] = blocks[@floatToInt(usize, (done - @intToFloat(f64, doneInt)) * @intToFloat(f64, blocks.len))];
+                std.mem.set(u16, buf[doneInt + 1 ..], ' ');
+            }
+            const sep = comptime ansi.fade("|");
+            try stdout.print(ansi.style(ansi.CLEAR_LINE ++ sep ++ "{s}" ++ sep ++ ansi.bold(" {d:.0} {s}/s"), .blue), .{ std.unicode.fmtUtf16le(&buf), human_rate.value, human_rate.unit });
+        }
+
+        if (read == 0) break;
     }
-    const d = std.time.milliTimestamp() - now;
-    try stdout.print(ansi.style(ansi.CLEAR_LINE ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @intToFloat(f64, d) / 1000 });
+    const end = std.time.milliTimestamp();
+    const delta = end - start;
+    try stdout.print(ansi.style(ansi.CLEAR_LINE ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @intToFloat(f64, delta) / 1000 });
 
     try file.sync();
 }

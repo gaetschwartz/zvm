@@ -1,0 +1,11 @@
+.{
+    .name = "zvm",
+    .version = "0.0.1",
+
+    .dependencies = .{
+        .known_folders = .{
+            .url = "https://github.com/ziglibs/known-folders/archive/53fe3b676f32e59d46f4fd201d7ab200e5f6cb98.tar.gz",
+            .hash = "12203e18503cd0fa097a4404b0c4f8535a68536886b536ae51c786455238ba5f183b",
+        },
+    },
+}
