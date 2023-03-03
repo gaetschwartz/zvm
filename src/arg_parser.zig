@@ -307,12 +307,13 @@ pub const ArgParser = struct {
         var command = &self.root_command.?;
         var depth: usize = 0;
         const stderr = std.io.getStdErr().writer();
-
-        for (self.args.items[1..]) |command_name| {
+        // std.log.debug("Running with args {s}", .{self.args.items});
+        main_loop: for (self.args.items[1..]) |command_name| {
             if (std.mem.startsWith(u8, command_name, "-")) {
                 break;
             }
             // if (builtin.mode == .Debug) {
+            //     std.debug.print("command: {s}\n", .{command_name});
             //     std.debug.print("{d} commands at depth {d} of {s}:\n", .{ command.commands.items.len, depth, command.name });
             //     for (command.commands.items) |c| {
             //         std.debug.print("  {s}", .{c.name});
@@ -324,7 +325,7 @@ pub const ArgParser = struct {
                     // std.log.debug("Found command: {s} at depth {d}", .{ command_name, depth });
                     command = c;
                     depth += 1;
-                    continue;
+                    continue :main_loop;
                 }
             }
             break;

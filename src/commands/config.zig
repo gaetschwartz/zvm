@@ -18,9 +18,18 @@ const FieldDesc = struct {
     desc: []const u8,
 };
 
-const descriptions = [_]FieldDesc{
-    .{ .name = "git_dir_path", .desc = "The path to the git directory" },
-};
+const descriptions = std.ComptimeStringMap([]const u8, .{
+    .{ "git_dir_path", "The path to the git directory" },
+});
+
+comptime {
+    const typeInfo = @typeInfo(ZvmConfig);
+    inline for (typeInfo.Struct.fields) |field| {
+        if (!descriptions.has(field.name)) {
+            @compileError("Missing description for field: " ++ field.name);
+        }
+    }
+}
 
 pub fn config_cmd(ctx: ArgParser.RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -30,6 +39,7 @@ pub fn config_cmd(ctx: ArgParser.RunContext) !void {
     const stdout = std.io.getStdOut().writer();
 
     const zvm = try zvmDir(allocator);
+    std.log.debug("Config command: {s}", .{ctx.command.name});
 
     if (std.mem.eql(u8, ctx.command.name, "config")) {
         // print the config
@@ -91,8 +101,10 @@ pub fn config_cmd(ctx: ArgParser.RunContext) !void {
 
         var new_cfg = ZvmConfig{};
         const typeInfo = @typeInfo(ZvmConfig);
+        var found = false;
         inline for (typeInfo.Struct.fields) |field| {
             if (std.mem.eql(u8, field.name, key)) {
+                found = true;
                 if (value) |v| {
                     @field(new_cfg, field.name) = v;
                 } else {
@@ -105,6 +117,15 @@ pub fn config_cmd(ctx: ArgParser.RunContext) !void {
                 new.* = old;
                 @field(new_cfg, field.name) = new.*;
             }
+        }
+        if (!found) {
+            try stdout.print(ansi.style("Unknown config field: " ++ ansi.bold("{s}\n"), .red), .{key});
+            try stdout.print(ansi.fade("Available fields:\n"), .{});
+
+            inline for (typeInfo.Struct.fields) |field| {
+                try stdout.print(ansi.fade("  {s}: {s}\n"), .{ field.name, descriptions.get(field.name).? });
+            }
+            std.os.exit(1);
         }
 
         try writeConfig(.{ .allocator = allocator, .zvm_path = zvm }, new_cfg);
