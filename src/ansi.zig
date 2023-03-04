@@ -44,6 +44,11 @@ pub const Colors = struct {
     pub const BLINK = "\x1b[5m";
     pub const REVERSE = "\x1b[7m";
     pub const UNDERLINE = "\x1b[4m";
+    pub const STRIKETHROUGH = "\x1b[9m";
+
+    // actually not used, but to represent colors looking like fg_0x123456 or bg_0x123456
+    pub const fg_0x123456 = struct {};
+    pub const bg_0x123456 = struct {};
 };
 
 // clear current line using ansi escape sequence
@@ -52,33 +57,86 @@ pub const CLEAR_LINE_ONLY = "\x1b[2K";
 pub const CURSOR_TO_0 = "\x1b[0G";
 pub const CLEAR_LINE = CURSOR_TO_0 ++ CLEAR_LINE_ONLY;
 
+pub const Color = struct {
+    layer: enum { fg, bg } = .fg,
+    color: u24,
+};
+
 /// Accepts an enum literal representing a color or a struct with enum literals as fields.
 pub fn c(comptime colors: anytype) []const u8 {
-    const type_info = @typeInfo(@TypeOf(colors));
-    switch (type_info) {
-        .Struct => {
-            const fields = comptime type_info.Struct.fields;
-            var temp: []const u8 = "";
-            for (fields) |field| {
-                temp = temp ++ colorOfEnum(@field(colors, field.name));
-            }
-            return temp;
-        },
-        .EnumLiteral => return colorOfEnum(colors),
-        else => @compileError("Invalid type for colors: " ++ @typeName(@TypeOf(colors))),
+    comptime {
+        const type_info = @typeInfo(@TypeOf(colors));
+        if (@TypeOf(colors) == Color) {
+            return colorOf(colors);
+        }
+        switch (type_info) {
+            .Struct => {
+                const fields = type_info.Struct.fields;
+                var temp: []const u8 = "";
+                for (fields) |field| {
+                    temp = temp ++ colorOf(@field(colors, field.name));
+                }
+                return temp;
+            },
+            else => return colorOf(colors),
+        }
     }
 }
 
-fn colorOfEnum(comptime color: @TypeOf(.EnumLiteral)) []const u8 {
-    // create new enum literal
-    const tagName = @tagName(color);
-
-    // make upercase
-    const upperTagName = comptime upperCase(tagName);
-    if (@hasDecl(Colors, upperTagName)) {
-        return @field(Colors, upperTagName);
+fn colorOf(comptime color: anytype) []const u8 {
+    if (@TypeOf(color) == Color) {
+        const prefix = comptime switch (color.layer) {
+            .fg => "38;2;",
+            .bg => "48;2;",
+        };
+        return std.fmt.comptimePrint("\x1b[" ++ prefix ++ "{};{};{}m", .{ color.color >> 16, (color.color >> 8) & 0xff, color.color & 0xff });
     }
-    @compileError("Invalid color: " ++ tagName);
+
+    var colorName: []const u8 = @typeName(@TypeOf(color));
+
+    const tpInfo = @typeInfo(@TypeOf(color));
+    switch (tpInfo) {
+        .EnumLiteral => {
+            const tagName = @tagName(color);
+            colorName = tagName;
+
+            // if tagname looks like fg_0x123456 or bg_0x123456, then we need to convert it to a string
+            const isHexColor = comptime std.mem.startsWith(u8, tagName, "fg_0x") or std.mem.startsWith(u8, tagName, "bg_0x");
+            if (isHexColor) {
+                const n = std.fmt.parseInt(u24, tagName[5..], 16) catch @compileError("Invalid hex color: " ++ tagName);
+                const r = n >> 16;
+                const g = (n >> 8) & 0xff;
+                const b = n & 0xff;
+                const prefix = comptime switch (tagName[0]) {
+                    'f' => "38;2;",
+                    'b' => "48;2;",
+                    else => @compileError("Invalid color: " ++ tagName),
+                };
+                return std.fmt.comptimePrint("\x1b[" ++ prefix ++ "{};{};{}m", .{ r, g, b });
+            }
+
+            // make upercase
+            const upperTagName = comptime upperCase(tagName);
+            if (@hasDecl(Colors, upperTagName)) {
+                return @field(Colors, upperTagName);
+            }
+        },
+        else => {},
+    }
+
+    //? list all allowed colors in error message
+    var allowedColors: []const u8 = "";
+    // iterate through all the fields of Colors
+    inline for (@typeInfo(Colors).Struct.decls) |decl| {
+        allowedColors = allowedColors ++ decl.name ++ ", ";
+    }
+    allowedColors = allowedColors[0 .. allowedColors.len - 2];
+
+    @compileError("Invalid color '" ++ colorName ++ "'. Allowed values are:\n" ++
+        \\1. An enum literal from the Colors enum {
+    ++ allowedColors ++ "}\n" ++
+        \\2. A Color struct Color{ .layer = .fg, .color = 0x123456 }
+    );
 }
 
 /// Accepts an enum literal representing a color or a struct with enum literals as fields.
@@ -90,11 +148,11 @@ pub fn style(comptime text: []const u8, comptime colors: anytype) []const u8 {
             const fields = type_info.Struct.fields;
             var temp = text;
             for (fields) |field| {
-                temp = colorOfEnum(@field(colors, field.name)) ++ temp;
+                temp = colorOf(@field(colors, field.name)) ++ temp;
             }
             return temp ++ c(.RESET);
         },
-        .EnumLiteral => return colorOfEnum(colors) ++
+        .EnumLiteral => return colorOf(colors) ++
             text ++
             c(.RESET),
         else => @compileError("Invalid type for colors: " ++ @typeName(@TypeOf(colors))),
@@ -133,6 +191,18 @@ test "upperCase" {
     const text = "hello";
     const upper = upperCase(text);
     try std.testing.expectEqualStrings(upper, "HELLO");
+}
+
+test "fg_0x123456 & bg_0x123456" {
+    const text = "hello";
+    const fg = comptime c(.fg_0x123456);
+    const bg = comptime c(.bg_0x123456);
+    const reset = comptime c(.RESET);
+    try std.testing.expectEqualStrings(fg ++ text ++ reset, "\x1b[38;2;18;52;86mhello\x1b[0m");
+    try std.testing.expectEqualStrings(bg ++ text ++ reset, "\x1b[48;2;18;52;86mhello\x1b[0m");
+
+    try std.testing.expectEqualStrings(c(.fg_0x123456), c(Color{ .color = 0x123456, .layer = .fg }));
+    try std.testing.expectEqualStrings(c(.bg_0x123456), c(Color{ .color = 0x123456, .layer = .bg }));
 }
 
 test "all colors can be resolved" {
