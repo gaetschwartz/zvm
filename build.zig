@@ -1,7 +1,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zvm_version = std.builtin.Version.parse("0.2.11") catch unreachable;
+const zvm_version = std.builtin.Version.parse("0.2.12") catch unreachable;
 
 pub fn build(b: *std.Build) void {
     comptime {
