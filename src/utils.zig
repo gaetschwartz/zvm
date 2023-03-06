@@ -73,19 +73,19 @@ pub fn HumanSize(comptime T: type) type {
                 }
                 x = switch (@typeInfo(T)) {
                     .Int => x >> 10,
-                    .Float => x / 1024.0,
-                    else => @compileError("Unsupported type"),
+                    .Float => x / 1024,
+                    else => @compileError("Unsupported type '" ++ @typeName(T) ++ "'"),
                 };
             }
             return Self{
                 .value = x,
-                .unit = enum_obj.fields[enum_obj.fields.len - 1].name,
+                .unit = comptime enum_obj.fields[enum_obj.fields.len - 1].name,
             };
         }
     };
 }
 
-test "human size" {
+test "HumanSize(u64)" {
     const cases = [_]struct {
         size: u64,
         expected: HumanSize(u64),
@@ -113,8 +113,41 @@ test "human size" {
     }
 }
 
+test "HumanSize(f64)" {
+    const cases = [_]struct {
+        size: f64,
+        expected: HumanSize(f64),
+    }{
+        .{ .size = 0, .expected = HumanSize(f64){ .value = 0, .unit = "B" } },
+        .{ .size = 1, .expected = HumanSize(f64){ .value = 1, .unit = "B" } },
+        .{ .size = 1023, .expected = HumanSize(f64){ .value = 1023, .unit = "B" } },
+        .{ .size = 1024, .expected = HumanSize(f64){ .value = 1, .unit = "KB" } },
+        .{ .size = 1024 * 1024 - 1, .expected = HumanSize(f64){ .value = 1023, .unit = "KB" } },
+        .{ .size = 1024 * 1024, .expected = HumanSize(f64){ .value = 1, .unit = "MB" } },
+        .{ .size = 1024 * 1024 * 1024 - 1, .expected = HumanSize(f64){ .value = 1023, .unit = "MB" } },
+        .{ .size = 1024 * 1024 * 1024, .expected = HumanSize(f64){ .value = 1, .unit = "GB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(f64){ .value = 1023, .unit = "GB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024, .expected = HumanSize(f64){ .value = 1, .unit = "TB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(f64){ .value = 1023, .unit = "TB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024, .expected = HumanSize(f64){ .value = 1, .unit = "PB" } },
+        .{ .size = 1024 * 1024 * 1024 * 1024 * 1024 * 1024 - 1, .expected = HumanSize(f64){ .value = 1023, .unit = "PB" } },
+    };
+    for (cases) |c| {
+        const actual = HumanSize(f64).compute(c.size);
+        expectHumanSizeDelta(f64, c.expected, actual, 1) catch |err| {
+            std.debug.print("expected: {d} {s}, actual: {d} {s}\n", .{ c.expected.value, c.expected.unit, actual.value, actual.unit });
+            return err;
+        };
+    }
+}
+
 fn expectHumanSize(expected: HumanSize(u64), actual: HumanSize(u64)) !void {
     try std.testing.expectEqual(expected.value, actual.value);
+    try std.testing.expectEqualStrings(expected.unit, actual.unit);
+}
+
+fn expectHumanSizeDelta(comptime T: type, expected: HumanSize(T), actual: HumanSize(T), delta: T) !void {
+    try std.testing.expectApproxEqAbs(expected.value, actual.value, delta);
     try std.testing.expectEqualStrings(expected.unit, actual.unit);
 }
 
