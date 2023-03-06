@@ -16,9 +16,8 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
-    defer arena.deinit();
+    var allocator = gpa.allocator();
+    defer _ = gpa.deinit();
 
     const options = b.addOptions();
     if (gitCommit(allocator)) |commit| {
@@ -26,8 +25,8 @@ pub fn build(b: *std.Build) void {
     } else {
         options.addOption(?[]const u8, "git_commit", null);
     }
-    const commit_count = commitCount(allocator) orelse 0;
-    options.addOption(u8, "commit_count", commit_count);
+    const commit_count = commitCount(allocator);
+    options.addOption(?u32, "commit_count", commit_count);
 
     const branch = gitBranch(allocator);
     options.addOption(?[]const u8, "git_branch", branch);
@@ -35,7 +34,7 @@ pub fn build(b: *std.Build) void {
         allocator.free(br);
     };
 
-    const versionString = std.fmt.comptimePrint("{}", .{std.fmt.Formatter(std.builtin.Version.format){ .data = zvm_version }});
+    const versionString = std.fmt.comptimePrint("{}", .{zvm_version});
     options.addOption([]const u8, "version", versionString);
 
     const isCi = std.process.getEnvVarOwned(allocator, "CI") catch "false";
@@ -48,7 +47,9 @@ pub fn build(b: *std.Build) void {
         .source_file = .{ .path = "known-folders/known-folders.zig" },
     });
 
-    const ansi = b.createModule(.{ .source_file = .{ .path = "src/ansi.zig" } });
+    const ansi_module = b.createModule(.{
+        .source_file = .{ .path = "src/ansi.zig" },
+    });
 
     const zvm = b.addExecutable(.{
         .name = "zvm",
@@ -57,7 +58,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     zvm.addModule("known-folders", known_folders_module);
-    zvm.addModule("ansi", ansi);
+    zvm.addModule("ansi", ansi_module);
     zvm.addOptions("zvm_build_options", options);
     zvm.install();
 
@@ -76,7 +77,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    arg_parser_test.addModule("ansi", ansi);
+    arg_parser_test.addModule("ansi", ansi_module);
 
     _ = registerTest(b, test_step, .{
         .root_source_file = .{ .path = "src/index.zig" },
@@ -119,7 +120,7 @@ fn gitCommit(allocator: std.mem.Allocator) ?[40]u8 {
     return output;
 }
 
-fn commitCount(allocator: std.mem.Allocator) ?u8 {
+fn commitCount(allocator: std.mem.Allocator) ?u32 {
     const exec_result = std.ChildProcess.exec(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-list", "--count", "HEAD" },
@@ -128,12 +129,11 @@ fn commitCount(allocator: std.mem.Allocator) ?u8 {
     defer allocator.free(exec_result.stderr);
     if (exec_result.term != .Exited or exec_result.term.Exited != 0) return null;
 
-    var i: usize = 0;
-    var number: u8 = 0;
-    while (i < 8) : (i += 1) {
-        switch (exec_result.stdout[i]) {
+    var number: u32 = 0;
+    for (exec_result.stdout) |c| {
+        switch (c) {
             '\n' => break,
-            '1'...'9' => number = number * 10 + (exec_result.stdout[i] - '0'),
+            '0'...'9' => number = number * 10 + (c - '0'),
             else => return null,
         }
     }
@@ -148,7 +148,6 @@ fn gitBranch(allocator: std.mem.Allocator) ?[]const u8 {
     defer allocator.free(exec_result.stdout);
     defer allocator.free(exec_result.stderr);
 
-    // +1 for trailing newline.
     if (exec_result.stdout.len == 0) return null;
     if (exec_result.stderr.len != 0) return null;
 
@@ -172,7 +171,3 @@ fn date(allocator: std.mem.Allocator) ?[DATE_SIZE]u8 {
     std.mem.copy(u8, &output, exec_result.stdout[0..DATE_SIZE]);
     return output;
 }
-
-pub const BuildInfo = struct {
-    version: []const u8,
-};
