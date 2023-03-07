@@ -43,9 +43,7 @@ pub fn build(b: *std.Build) void {
     options.addOption([]const u8, "is_ci", isCi);
     options.addOption(?[DATE_SIZE]u8, "build_date", date(allocator) orelse null);
 
-    const known_folders_module = b.createModule(.{
-        .source_file = .{ .path = "known-folders/known-folders.zig" },
-    });
+    const known_folders_module = b.dependency("known_folders", .{}).module("known-folders");
 
     const ansi_module = b.createModule(.{
         .source_file = .{ .path = "src/ansi.zig" },
