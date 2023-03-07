@@ -6,7 +6,7 @@ const zvm_version = std.builtin.Version.parse("0.2.12") catch unreachable;
 pub fn build(b: *std.Build) void {
     comptime {
         const current_zig = builtin.zig_version;
-        const min_zig = std.SemanticVersion.parse("0.11.0-dev.1817+f6c934677") catch return; // package manager hashes made consistent on windows
+        const min_zig = std.SemanticVersion.parse("0.11.0-dev.1893+277015960") catch unreachable;
         if (current_zig.order(min_zig) == .lt) {
             @compileError(std.fmt.comptimePrint("Your Zig version v{} does not meet the minimum build requirement of v{}", .{ current_zig, min_zig }));
         }
@@ -20,13 +20,10 @@ pub fn build(b: *std.Build) void {
     defer _ = gpa.deinit();
 
     const options = b.addOptions();
-    if (gitCommit(allocator)) |commit| {
-        options.addOption(?[]const u8, "git_commit", commit[0..]);
-    } else {
-        options.addOption(?[]const u8, "git_commit", null);
-    }
-    const commit_count = commitCount(allocator);
-    options.addOption(?u32, "commit_count", commit_count);
+
+    const hash: ?[]const u8 = if (gitCommitHash(allocator)) |h| h[0..] else null;
+    options.addOption(?[]const u8, "git_commit_hash", hash);
+    options.addOption(?u32, "git_commit_count", gitCommitCount(allocator));
 
     const branch = gitBranch(allocator);
     options.addOption(?[]const u8, "git_branch", branch);
@@ -37,10 +34,13 @@ pub fn build(b: *std.Build) void {
     const versionString = std.fmt.comptimePrint("{}", .{zvm_version});
     options.addOption([]const u8, "version", versionString);
 
-    const isCi = std.process.getEnvVarOwned(allocator, "CI") catch "false";
-    defer if (std.process.hasEnvVarConstant("CI")) allocator.free(isCi);
+    const isCi = blk: {
+        const ci = std.process.getEnvVarOwned(allocator, "CI") catch break :blk false;
+        defer allocator.free(ci);
+        break :blk std.mem.eql(u8, ci, "true");
+    };
 
-    options.addOption([]const u8, "is_ci", isCi);
+    options.addOption(bool, "is_ci", isCi);
     options.addOption(?[DATE_SIZE]u8, "build_date", date(allocator) orelse null);
 
     const known_folders_module = b.dependency("known_folders", .{}).module("known-folders");
@@ -100,7 +100,7 @@ inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.
     return exe_tests;
 }
 
-fn gitCommit(allocator: std.mem.Allocator) ?[40]u8 {
+fn gitCommitHash(allocator: std.mem.Allocator) ?[40]u8 {
     const exec_result = std.ChildProcess.exec(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-parse", "--verify", "HEAD" },
@@ -118,7 +118,7 @@ fn gitCommit(allocator: std.mem.Allocator) ?[40]u8 {
     return output;
 }
 
-fn commitCount(allocator: std.mem.Allocator) ?u32 {
+fn gitCommitCount(allocator: std.mem.Allocator) ?u32 {
     const exec_result = std.ChildProcess.exec(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-list", "--count", "HEAD" },
@@ -155,12 +155,12 @@ fn gitBranch(allocator: std.mem.Allocator) ?[]const u8 {
     return allocated;
 }
 
-const DATE_SIZE = 23;
+const DATE_SIZE = 25;
 
 fn date(allocator: std.mem.Allocator) ?[DATE_SIZE]u8 {
     const exec_result = std.ChildProcess.exec(.{
         .allocator = allocator,
-        .argv = &.{ "date", "+%Y-%m-%d %H:%M:%S %Z" },
+        .argv = &.{ "date", "+%Y-%m-%d %H:%M:%S %z" },
     }) catch return null;
     defer allocator.free(exec_result.stdout);
     defer allocator.free(exec_result.stderr);

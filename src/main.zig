@@ -48,6 +48,7 @@ pub fn main() !void {
 pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
     const version = ctx.hasFlag("version");
     const verbose = ctx.hasFlag("verbose");
+    _ = verbose;
     const raw_version = ctx.hasFlag("raw-version");
     const stdout = std.io.getStdOut().writer();
 
@@ -81,15 +82,13 @@ pub fn zvm_cmd(ctx: ArgParser.RunContext) !void {
         const end = comptime ansi.c(.reset) ++ "\n";
         const rstBold = comptime ansi.c(.reset_bold);
         _ = try stdout.write(start ++ " version      " ++ rstBold ++ (build_options.version) ++ end);
-        _ = try stdout.write(start ++ " commit_hash  " ++ rstBold ++ (build_options.git_commit orelse "unknown") ++ end);
+        _ = try stdout.write(start ++ " commit_hash  " ++ rstBold ++ (build_options.git_commit_hash orelse "unknown") ++ end);
         _ = try stdout.write(start ++ " build_date   " ++ rstBold ++ (build_options.build_date orelse "unknown") ++ end);
         _ = try stdout.write(start ++ " branch       " ++ rstBold ++ (build_options.git_branch orelse "unknown") ++ end);
-        _ = try stdout.write(start ++ " zig          " ++ rstBold ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end);
+        _ = try stdout.write(start ++ " zig version  " ++ rstBold ++ std.fmt.comptimePrint("{}", .{builtin.zig_version}) ++ end);
         _ = try stdout.write(start ++ " target       " ++ rstBold ++ std.fmt.comptimePrint("{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) }) ++ end);
+        _ = try stdout.write(start ++ " is ci        " ++ rstBold ++ (if (build_options.is_ci) "yes" else "no") ++ end);
 
-        if (verbose) {
-            _ = try stdout.write(start ++ " is_ci        " ++ rstBold ++ (build_options.is_ci) ++ end);
-        }
         return;
     }
     try ctx.command.printHelpWithOptions(std.io.getStdOut().writer(), .{
