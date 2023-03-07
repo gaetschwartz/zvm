@@ -7,6 +7,7 @@ const zvmDir = @import("../utils.zig").zvmDir;
 const path = std.fs.path;
 const ansi = @import("ansi");
 const config = @import("config.zig");
+const builtin = @import("builtin");
 
 pub const VersionInfo = struct {
     version: []const u8,
@@ -21,7 +22,6 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     defer arena.deinit();
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
-    _ = stderr;
 
     const zvm = try zvmDir(allocator);
     const global_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "default" });
@@ -40,55 +40,7 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     };
     try stdout.print("Installed versions:\x0a", .{});
 
-    // ? get current config and check if there is a git path setup
-    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
-    defer config.freeConfig(allocator, cfg);
-    if (cfg.git_dir_path) |git_dir_path| {
-        blk: {
-            std.log.debug("git_dir_path: {s}", .{git_dir_path});
-            var git_dir = std.fs.openDirAbsolute(git_dir_path, .{}) catch |err|
-                switch (err) {
-                error.FileNotFound => {
-                    std.log.debug("git_dir_path not found", .{});
-                    break :blk;
-                },
-                else => return err,
-            };
-
-            defer git_dir.close();
-
-            const zig_path = try path.join(allocator, &[_][]const u8{ git_dir_path, "zig-out", "bin", "zig" });
-
-            // exec zig version
-            const res = std.ChildProcess.exec(.{ .allocator = allocator, .argv = &[_][]const u8{ zig_path, "version" } }) catch |err| {
-                switch (err) {
-                    error.FileNotFound => {
-                        std.log.err("zig not found in git_dir_path ({s})", .{git_dir_path});
-                        break :blk;
-                    },
-                    else => return err,
-                }
-            };
-            defer allocator.free(res.stdout);
-            defer allocator.free(res.stderr);
-
-            // read the output
-            var version = res.stdout;
-            for (version) |*c| {
-                if (c.* == '\n') {
-                    c.* = 0;
-                    break;
-                }
-            }
-
-            // print the output
-            const is_default = symlinked_path != null and std.mem.eql(u8, symlinked_path.?, git_dir_path);
-            const startSymbol = if (is_default) (comptime ansi.c(.green) ++ ">") else comptime ansi.fade("-");
-            try stdout.print("  {s} {s} " ++ ansi.fade("(git)\x0a") ++ ansi.c(.reset), .{ startSymbol, version });
-        }
-    } else {
-        std.log.debug("no git_dir_path", .{});
-    }
+    const printGitVersionThread = try std.Thread.spawn(.{}, printGitVersionThreaded, .{ allocator, zvm, symlinked_path });
 
     const versions = try path.join(allocator, &[_][]const u8{ zvm, "versions" });
 
@@ -111,7 +63,8 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
         const version = readVersionInfo(allocator, version_info_path) catch |err| {
             switch (err) {
                 error.FileNotFound => {
-                    std.log.debug("skipping {s} because it doesn't have a .zvm.json file", .{entry.name});
+                    try stderr.print(ansi.style("error: version info not found for {s}\x0a", .{.red}), .{entry.name});
+                    try stderr.print(ansi.style("Consider destroying the current zvm installation using `zvm destroy` and reinstalling that version.\x0a", .{ .red, .fade }), .{});
                     continue;
                 },
                 else => return err,
@@ -125,6 +78,65 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
         } else {
             try stdout.print("  {s} {s}\x0a" ++ ansi.c(.reset), .{ startSymbol, version.version });
         }
+    }
+
+    printGitVersionThread.join();
+}
+
+fn printGitVersionThreaded(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path: ?[]const u8) void {
+    printGitVersion(allocator, zvm, symlinked_path) catch |err| {
+        std.log.err("error: {s}", .{@errorName(err)});
+    };
+}
+
+fn printGitVersion(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path: ?[]const u8) !void {
+    std.log.debug("started printGitVersion", .{});
+    const stdout = std.io.getStdOut().writer();
+    // ? get current config and check if there is a git path setup
+    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    defer config.freeConfig(allocator, cfg);
+    if (cfg.git_dir_path) |git_dir_path| {
+        blk: {
+            std.log.debug("git_dir_path: {s}", .{git_dir_path});
+            const executableName = if (builtin.os.tag == .windows) "zig.exe" else "zig";
+            const zig_path = try path.join(allocator, &[_][]const u8{ git_dir_path, executableName });
+
+            const stat = std.fs.cwd().statFile(zig_path) catch |err| {
+                switch (err) {
+                    error.FileNotFound => {
+                        std.log.err("zig not found in git_dir_path ({s})", .{git_dir_path});
+                        break :blk;
+                    },
+                    else => return err,
+                }
+            };
+
+            if (stat.kind != .File) {
+                std.log.err("zig is not a file in git_dir_path ({s})", .{git_dir_path});
+                break :blk;
+            }
+
+            // exec zig version
+            const res = try std.ChildProcess.exec(.{ .allocator = allocator, .argv = &[_][]const u8{ zig_path, "version" } });
+            defer allocator.free(res.stdout);
+            defer allocator.free(res.stderr);
+
+            // read the output
+            var version = res.stdout;
+            for (version, 0..) |c, i| {
+                if (c == '\n') {
+                    version = version[0..i];
+                    break;
+                }
+            }
+
+            // print the output
+            const is_default = symlinked_path != null and std.mem.eql(u8, symlinked_path.?, git_dir_path);
+            const startSymbol = if (is_default) (comptime ansi.c(.green) ++ ">") else comptime ansi.fade("-");
+            try stdout.print("  {s} {s} " ++ ansi.fade("(git)\x0a") ++ ansi.c(.reset), .{ startSymbol, version });
+        }
+    } else {
+        std.log.debug("no git_dir_path", .{});
     }
 }
 

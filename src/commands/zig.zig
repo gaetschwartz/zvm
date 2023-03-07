@@ -8,6 +8,7 @@ const zvmDir = utils.zvmDir;
 const path = std.fs.path;
 const ansi = @import("ansi");
 const config = @import("config.zig");
+const builtin = @import("builtin");
 
 pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -21,7 +22,7 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
 
     const cwd = std.fs.cwd();
     // check if the cwd is a zvm project
-    var buffer = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
+    var buffer: [std.fs.MAX_PATH_BYTES]u8 = undefined;
     const zvm = try zvmDir(allocator);
     const zig_dir_path = blk: {
         break :blk cwd.readLink(".zvm", buffer[0..]) catch |err| switch (err) {
@@ -60,7 +61,7 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
         };
         if (std.mem.eql(u8, symlinked, git_dir_path)) {
             // symlinked to the same path, so we need to update it
-            zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig-out", "bin", "zig" });
+            zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig" });
         } else {
             zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig" });
         }
@@ -69,9 +70,7 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
         zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zig_dir_path, "zig" });
     }
 
-    if (@import("builtin").mode == .Debug) {
-        std.log.debug("Using zig version {s} at {s}...\n", .{ path.basename(zig_dir_path), zig_dir_path });
-    }
+    std.log.debug("Using zig version {s} at {s}...", .{ path.basename(zig_dir_path), zig_dir_path });
 
     var argvs = std.ArrayList([]const u8).init(allocator);
     try argvs.append(zig_path);
@@ -80,7 +79,7 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     }
     const argv = try argvs.toOwnedSlice();
 
-    if (@import("builtin").mode == .Debug) {
+    if (builtin.mode == .Debug) {
         try stderr.print("debug: Running ", .{});
         try printArgv(argv, stderr);
         try stderr.print("\n", .{});
@@ -89,6 +88,7 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     var proc = std.ChildProcess.init(argv, allocator);
     proc.stderr_behavior = .Inherit;
     proc.stdout_behavior = .Inherit;
+    proc.stdin_behavior = .Inherit;
 
     try proc.spawn();
 

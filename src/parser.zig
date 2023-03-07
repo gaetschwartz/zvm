@@ -174,7 +174,7 @@ pub inline fn createParser(allocator: std.mem.Allocator) !ArgParser {
                 .optional = true,
             },
             .{
-                .name = null,
+                .name = 'g',
                 .long_name = "global",
                 .description = "set the global version",
                 .optional = true,

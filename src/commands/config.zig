@@ -9,8 +9,16 @@ const ansi = @import("ansi");
 
 pub const ZvmConfig = struct {
     git_dir_path: ?[]const u8 = null,
+    const Self = @This();
 
     pub const default = ZvmConfig{};
+
+    pub fn format(self: ZvmConfig, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+        _ = options;
+        // json stringify
+        try std.json.stringify(self, .{ .whitespace = .{ .indent = .None } }, writer);
+    }
 };
 
 const FieldDesc = struct {

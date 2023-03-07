@@ -61,27 +61,12 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
         return;
     }
 
-    var target_version_path: []const u8 = undefined;
     const target = ctx.getPositional("target").?;
-
-    if (std.mem.eql(u8, target, "git")) {
-        const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
-        if (cfg.git_dir_path) |git_dir_path| {
-            std.log.debug("git_dir_path: {s}", .{git_dir_path});
-            target_version_path = git_dir_path;
-        } else {
-            try stderr.print(
-                ansi.style("You haven't setup a git repository of zig yet." ++
-                    " Use " ++ ansi.bold("zvm config set git_dir_path <path>") ++
-                    " to set one up.\n", .red),
-                .{},
-            );
-            return;
-        }
-    } else {
-        std.log.debug("no git_dir_path", .{});
-        target_version_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target });
-    }
+    const target_version_path: []const u8 = getTargetPath(allocator, zvm, target) catch |err| switch (err) {
+        error.GitDirPathNotSet => std.os.exit(1),
+        else => return err,
+    };
+    defer allocator.free(target_version_path);
 
     std.log.debug("target_version_path: {s}", .{target_version_path});
     // check if the target version exists
@@ -116,10 +101,19 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
         if (path) |p| {
             std.log.debug("PATH environment variable found: {s}", .{p});
             // split the path into an array
-            var iter = std.mem.split(u8, p, ":");
+
             const found = blk: {
-                while (iter.next()) |path_entry| {
-                    if (std.mem.eql(u8, path_entry, global_version_path)) {
+                if (std.mem.indexOf(u8, p, global_version_path)) |idx| {
+                    // check if the path is at the beginning of the string
+                    if (idx == 0) {
+                        break :blk true;
+                    }
+                    // check if the path is at the end of the string
+                    if (idx + global_version_path.len == p.len) {
+                        break :blk true;
+                    }
+                    // check if the path is surrounded by colons
+                    if (p[idx - 1] == ':' and p[idx + global_version_path.len] == ':') {
                         break :blk true;
                     }
                 }
@@ -197,4 +191,29 @@ pub fn version_complete(ctx: Command.CompletionContext) !std.ArrayList(Command.C
         }
     }
     return completions;
+}
+
+pub fn getTargetPath(allocator: std.mem.Allocator, zvm: []const u8, target: []const u8) ![]const u8 {
+    const stderr = std.io.getStdErr().writer();
+
+    if (std.mem.eql(u8, target, "git")) {
+        const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+        defer config.freeConfig(allocator, cfg);
+
+        if (cfg.git_dir_path) |git_dir_path| {
+            std.log.debug("git_dir_path: {s}", .{git_dir_path});
+            return try allocator.dupe(u8, git_dir_path);
+        } else {
+            try stderr.print(
+                ansi.style("You haven't setup a git repository of zig yet." ++
+                    " Use " ++ ansi.bold("zvm config set git_dir_path <path>") ++
+                    " to set one up.\n", .red),
+                .{},
+            );
+            return error.GitDirPathNotSet;
+        }
+    } else {
+        std.log.debug("no git_dir_path", .{});
+        return try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target });
+    }
 }

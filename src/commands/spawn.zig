@@ -8,6 +8,7 @@ const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const RunContext = @import("../arg_parser.zig").ArgParser.RunContext;
 const VersionInfo = @import("list.zig").VersionInfo;
+const getTargetPath = @import("use.zig").getTargetPath;
 const printCmd = @import("../utils.zig").printCmd;
 
 pub fn spawn_cmd(ctx: RunContext) !void {
@@ -18,15 +19,22 @@ pub fn spawn_cmd(ctx: RunContext) !void {
     defer arena.deinit();
     var allocator = arena.allocator();
 
-    const target = ctx.getPositional("target").?;
-
     const zvm = try zvmDir(allocator);
+
+    const target = ctx.getPositional("target").?;
+    const target_version_path: []const u8 = getTargetPath(allocator, zvm, target) catch |err| switch (err) {
+        error.GitDirPathNotSet => std.os.exit(1),
+        else => return err,
+    };
+    defer allocator.free(target_version_path);
+    std.log.debug("target version path: {s}", .{target_version_path});
+
     const executableName = if (builtin.os.tag == .windows) "zig.exe" else "zig";
-    const zig_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions", target, executableName });
+    const zig_path = try std.fs.path.join(allocator, &[_][]const u8{ target_version_path, executableName });
     // try to access the zig binary to make sure it exists
     std.fs.accessAbsolute(zig_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            std.debug.print("path {s} not found", .{zig_path});
+            std.log.debug("path {s} not found", .{zig_path});
             try stderr.print(ansi.style("Zig version " ++ ansi.bold("{s}") ++ " not found.\n", .red), .{
                 target,
             });
