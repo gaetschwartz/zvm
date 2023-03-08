@@ -22,9 +22,12 @@ pub fn main() !void {
     const CPU_COUNT = try std.Thread.getCpuCount();
     const MAX_CHUNKS_IN_QUEUE = try std.fmt.parseUnsigned(u64, args.next() orelse "1", 10);
     const CHUNK_SIZE = try parseBytes(args.next() orelse "100 MB");
-    std.log.info("cpu count: {d}", .{CPU_COUNT});
-    std.log.info("max chunks in queue: {d}", .{MAX_CHUNKS_IN_QUEUE});
-    std.log.info("chunk size: {d} {s}", .{ HumanSize(u64).compute(CHUNK_SIZE).value, HumanSize(u64).compute(CHUNK_SIZE).unit });
+    if (std.log.defaultLogEnabled(.info)) {
+        std.log.info("cpu count: {d}", .{CPU_COUNT});
+        std.log.info("max chunks in queue: {d}", .{MAX_CHUNKS_IN_QUEUE});
+        const h = HumanSize(u64).compute(CHUNK_SIZE);
+        std.log.info("chunk size: {d} {s}", .{ h.value, h.unit });
+    }
 
     var client = std.http.Client{
         .allocator = gpa.allocator(),
@@ -33,14 +36,23 @@ pub fn main() !void {
 
     std.log.debug("fetching {s}", .{url});
 
+    var discardBuf: [1024]u8 = undefined;
+
     var headReq = try client.request(uri, .{ .method = .HEAD }, .{});
     defer headReq.deinit();
-    var discardBuf: [1024]u8 = undefined;
     while (try headReq.read(discardBuf[0..]) > 0) {}
 
     const content_length = headReq.response.headers.content_length orelse return error.ContentLengthMissing;
-    const human_length = HumanSize(u64).compute(content_length);
-    std.log.debug("content length: {d} {s} ({d})", .{ human_length.value, human_length.unit, content_length });
+    if (std.log.defaultLogEnabled(.debug)) {
+        const human_length = HumanSize(u64).compute(content_length);
+        std.log.debug("content length: {d} {s} ({d})", .{ human_length.value, human_length.unit, content_length });
+    }
+
+    var headReq2 = try requestRange(&client, uri, .{ .method = .HEAD }, .{}, Range{ .start = 0, .end = 0 });
+    defer headReq2.deinit();
+    while (try headReq2.read(discardBuf[0..]) > 0) {}
+    const content_len_ranged = headReq2.response.headers.content_length orelse return error.ContentLengthMissing;
+    if (content_len_ranged != 1) return error.ClientDoesNotSupportRangeRequests;
 
     var nodes = std.ArrayList(*std.TailQueue(DownloadContext).Node).init(allocator);
     defer {
@@ -140,7 +152,8 @@ fn download(
         std.log.debug("[thread {d}] reading data", .{std.Thread.getCurrentId()});
 
         const read = try req.readAll(buf);
-        if (read != buf.len) {
+
+        if (std.log.defaultLogEnabled(.debug) and read != buf.len) {
             std.log.debug("[thread {d}] read {d} bytes, expected {d}", .{ std.Thread.getCurrentId(), read, ctx.buffer.len });
         }
 
@@ -148,8 +161,10 @@ fn download(
         std.log.debug("[thread {d}] putting ctx on done queue", .{std.Thread.getCurrentId()});
         doneQueue.put(node);
 
-        const human = HumanSize(usize).compute(read);
-        std.log.debug("[thread {d}] downloaded {d} {s}", .{ std.Thread.getCurrentId(), human.value, human.unit });
+        if (std.log.defaultLogEnabled(.debug)) {
+            const human = HumanSize(usize).compute(read);
+            std.log.debug("[thread {d}] downloaded {d} {s}", .{ std.Thread.getCurrentId(), human.value, human.unit });
+        }
     }
 }
 
