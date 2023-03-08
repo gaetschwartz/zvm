@@ -44,15 +44,6 @@ test "archive type" {
     try std.testing.expectEqual(ArchiveType.unknown, archiveType("among.us.zip.."));
 }
 
-const HumanSizes = enum {
-    B,
-    KB,
-    MB,
-    GB,
-    TB,
-    PB,
-};
-
 pub fn HumanSize(comptime T: type) type {
     return struct {
         value: T,
@@ -60,8 +51,17 @@ pub fn HumanSize(comptime T: type) type {
 
         const Self = @This();
 
+        pub const Sizes = enum {
+            B,
+            KB,
+            MB,
+            GB,
+            TB,
+            PB,
+        };
+
         pub fn compute(size: T) Self {
-            const typeInfo = @typeInfo(HumanSizes);
+            const typeInfo = @typeInfo(Self.Sizes);
             const enum_obj = typeInfo.Enum;
             var x = size;
             inline for (enum_obj.fields[0 .. enum_obj.fields.len - 1]) |field| {
