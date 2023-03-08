@@ -20,8 +20,8 @@ pub fn main() !void {
     const uri = try std.Uri.parse(url);
 
     const CPU_COUNT = try std.Thread.getCpuCount();
-    const MAX_CHUNKS_IN_QUEUE = try std.fmt.parseUnsigned(u64, args.next() orelse "1", 10);
-    const CHUNK_SIZE = try parseBytes(args.next() orelse "100 MB");
+    const MAX_CHUNKS_IN_QUEUE = try std.fmt.parseUnsigned(u64, args.next().?, 10);
+    const CHUNK_SIZE = try parseBytes(args.next().?);
     if (std.log.defaultLogEnabled(.info)) {
         std.log.info("cpu count: {d}", .{CPU_COUNT});
         std.log.info("max chunks in queue: {d}", .{MAX_CHUNKS_IN_QUEUE});
@@ -36,11 +36,12 @@ pub fn main() !void {
 
     std.log.debug("fetching {s}", .{url});
 
-    var discardBuf: [1024]u8 = undefined;
+    var discardBuf: [8]u8 = undefined;
 
     var headReq = try client.request(uri, .{ .method = .HEAD }, .{});
     defer headReq.deinit();
-    while (try headReq.read(discardBuf[0..]) > 0) {}
+    const read = try headReq.read(&discardBuf);
+    std.debug.assert(read == 0);
 
     const content_length = headReq.response.headers.content_length orelse return error.ContentLengthMissing;
     if (std.log.defaultLogEnabled(.debug)) {
@@ -48,11 +49,11 @@ pub fn main() !void {
         std.log.debug("content length: {d} {s} ({d})", .{ human_length.value, human_length.unit, content_length });
     }
 
-    var headReq2 = try requestRange(&client, uri, .{ .method = .HEAD }, .{}, Range{ .start = 0, .end = 0 });
-    defer headReq2.deinit();
-    while (try headReq2.read(discardBuf[0..]) > 0) {}
-    const content_len_ranged = headReq2.response.headers.content_length orelse return error.ContentLengthMissing;
-    if (content_len_ranged != 1) return error.ClientDoesNotSupportRangeRequests;
+    // var headReq2 = try requestRange(&client, uri, .{ .method = .HEAD }, .{}, Range{ .start = 0, .end = 0 });
+    // defer headReq2.deinit();
+    // while (try headReq2.read(discardBuf[0..]) > 0) {}
+    // const content_len_ranged = headReq2.response.headers.content_length orelse return error.ContentLengthMissing;
+    // if (content_len_ranged != 1) return error.ClientDoesNotSupportRangeRequests;
 
     var nodes = std.ArrayList(*std.TailQueue(DownloadContext).Node).init(allocator);
     defer {
