@@ -4,7 +4,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const multi_http = b.createModule(.{ .source_file = .{ .path = "src/multi_http.zig" } });
+    const multi_http = b.addModule("multi-http", .{ .source_file = .{ .path = "src/multi_http.zig" } });
 
     const exe = b.addExecutable(.{
         .name = "multi-http-main",
