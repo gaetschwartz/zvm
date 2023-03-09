@@ -5,7 +5,7 @@ const assert = std.debug.assert;
 /// Uses a mutex to protect access.
 /// The queue does not manage ownership and the user is responsible to
 /// manage the storage of the nodes.
-pub fn SizedAtomicQueue(comptime T: type) type {
+pub fn BoundedAtomicQueue(comptime T: type) type {
     return struct {
         head: ?*Node,
         tail: ?*Node,
@@ -39,12 +39,8 @@ pub fn SizedAtomicQueue(comptime T: type) type {
             self.mutex.lock();
             defer self.mutex.unlock();
 
-            const thread_id = std.Thread.getCurrentId();
-            std.log.debug("[thread {}] putting node 0x{x} into queue", .{ thread_id, @ptrToInt(node) });
-
             // wait until there is space in the queue
             while (self.size >= self.max_size) {
-                std.log.debug("[thread {}] queue is full, waiting...", .{thread_id});
                 self.cond.wait(&self.mutex);
             }
 
@@ -80,7 +76,6 @@ pub fn SizedAtomicQueue(comptime T: type) type {
 
             self.size -= 1;
             defer {
-                std.log.debug("[thread {}] got node 0x{x} from queue, signaling", .{ std.Thread.getCurrentId(), @ptrToInt(head) });
                 self.cond.signal();
             }
 
