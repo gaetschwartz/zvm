@@ -15,8 +15,11 @@ pub fn main() !void {
     const writer = file.writer();
 
     var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
+
     _ = args.next(); // skip the first arg, which is the program name
     const url = args.next().?;
+    std.log.debug("url: {s}", .{url});
     const uri = try std.Uri.parse(url);
 
     const CPU_COUNT = try std.Thread.getCpuCount();
@@ -279,9 +282,11 @@ const Sized = enum(u64) {
 };
 
 fn parseBytes(s: []const u8) !u64 {
-    var split = std.mem.split(u8, s, " ");
-    const value = try std.fmt.parseUnsigned(u64, split.next() orelse return error.NoValue, 10);
-    const unit = split.next() orelse return error.NoUnit;
+    var end: usize = 0;
+    while (end < s.len and std.ascii.isDigit(s[end])) : (end += 1) {}
+    const value = try std.fmt.parseUnsigned(u64, s[0..end], 10);
+
+    const unit = s[end..];
     const size = std.meta.stringToEnum(Sized, unit) orelse return error.InvalidUnit;
     return value * @enumToInt(size);
 }
