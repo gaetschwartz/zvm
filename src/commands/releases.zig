@@ -27,15 +27,15 @@ pub fn releases_cmd(ctx: RunContext) !void {
     var index = try idx.fetchIndex(allocator);
 
     if (!raw) try stdout.print("Available releases:\n", .{});
-    var items = index.releases.items;
-    if (reverse) std.mem.reverse(Release, items);
+    var releases = index.releases;
+    if (reverse) std.mem.reverse(Release, releases);
     if (raw) {
-        for (items) |release| {
+        for (releases) |release| {
             try stdout.print("{s} ", .{release.version});
         }
         try stdout.print("\n", .{});
     } else {
-        for (items) |release| {
+        for (releases) |release| {
             try stdout.print("  - {s} " ++ ansi.fade("({s})\n"), .{ release.version, release.channel });
         }
     }

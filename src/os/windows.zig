@@ -102,14 +102,16 @@ pub fn ReadValueSimple(hKey: HKEY, comptime valueType: RegisteryValueType, path:
         }
     }
 
+    var pathBuf: [std.os.windows.PATH_MAX_WIDE]u16 = undefined;
     // read from the registry to see if developer mode is enabled
     // first create the key
     var key: HKEY = undefined;
     const keyDirName = std.fs.path.dirnameWindows(path).?;
-    const keyDir = std.unicode.utf8ToUtf16LeWithNull(std.heap.page_allocator, keyDirName) catch |err| {
-        std.log.debug("utf8ToUtf16LeWithNull failed with {s}", .{@errorName(err)});
-        return ReadRegistryValueError.FailedToConvertToUtf8;
-    };
+
+    const keyDirLength = try std.unicode.utf8ToUtf16Le(&pathBuf, keyDirName);
+    pathBuf[keyDirLength] = 0;
+    const keyDir = pathBuf[0..keyDirLength :0];
+
     std.log.debug("Opening key {s}", .{keyDirName});
     const result = std.os.windows.kernel32.RegOpenKeyExW(
         hKey,
@@ -120,13 +122,15 @@ pub fn ReadValueSimple(hKey: HKEY, comptime valueType: RegisteryValueType, path:
     );
     if (result != 0) {
         std.log.debug("RegOpenKeyExW failed with error code {d}", .{result});
-        return ReadRegistryValueError.RegOpenKeyExWFailed;
+        return error.RegOpenKeyExWFailed;
     }
+    defer _ = std.os.windows.advapi32.RegCloseKey(key);
+
     const keyFileName = std.fs.path.basenameWindows(path);
-    const keyFile = std.unicode.utf8ToUtf16LeWithNull(std.heap.page_allocator, keyFileName) catch |err| {
-        std.log.debug("utf8ToUtf16LeWithNull failed with {s}", .{@errorName(err)});
-        return ReadRegistryValueError.FailedToConvertToUtf8;
-    };
+    const keyFileLength = try std.unicode.utf8ToUtf16Le(&pathBuf, keyFileName);
+    pathBuf[keyFileLength] = 0;
+    const keyFile = pathBuf[0..keyFileLength :0];
+
     std.log.debug("Reading {s}", .{keyFileName});
 
     var lpData: regTypeW(valueType) = undefined;
@@ -141,7 +145,7 @@ pub fn ReadValueSimple(hKey: HKEY, comptime valueType: RegisteryValueType, path:
     );
     if (result2 != ERROR_SUCCESS) {
         std.log.debug("RegQueryValueExW failed with error code {d}", .{result2});
-        return ReadRegistryValueError.RegQueryValueExWFailed;
+        return error.RegQueryValueExWFailed;
     }
     return lpData;
 }
@@ -171,10 +175,11 @@ pub fn ReadValue(hKey: HKEY, comptime valueType: RegisteryValueType, ptr: regTyp
     // first create the key
     var key: HKEY = undefined;
     const keyDirName = std.fs.path.dirnameWindows(path).?;
-    const keyDir = std.unicode.utf8ToUtf16LeWithNull(std.heap.page_allocator, keyDirName) catch |err| {
-        std.log.debug("utf8ToUtf16LeWithNull failed with {s}", .{@errorName(err)});
-        return ReadRegistryValueError.FailedToConvertToUtf8;
-    };
+    var keyDirNameBuf: [keyDirName.len * 2]u16 = undefined;
+
+    const length = try std.unicode.utf8ToUtf16Le(keyDirNameBuf, keyDirName);
+    const keyDir = keyDirNameBuf[0..length];
+
     std.log.debug("Opening key {s}", .{keyDirName});
     const result = std.os.windows.kernel32.RegOpenKeyExW(
         hKey,
@@ -187,11 +192,12 @@ pub fn ReadValue(hKey: HKEY, comptime valueType: RegisteryValueType, ptr: regTyp
         std.log.debug("RegOpenKeyExW failed with error code {d}", .{result});
         return ReadRegistryValueError.RegOpenKeyExWFailed;
     }
+    defer _ = std.os.windows.advapi32.RegCloseKey(key);
     const keyFileName = std.fs.path.basenameWindows(path);
-    const keyFile = std.unicode.utf8ToUtf16LeWithNull(std.heap.page_allocator, keyFileName) catch |err| {
-        std.log.debug("utf8ToUtf16LeWithNull failed with {s}", .{@errorName(err)});
-        return ReadRegistryValueError.FailedToConvertToUtf8;
-    };
+    var keyFileNameBuf: [keyFileName.len * 2]u16 = undefined;
+    length = try std.unicode.utf8ToUtf16Le(keyFileNameBuf, keyFileName);
+    const keyFile = keyFileNameBuf[0..length];
+
     std.log.debug("Reading {s}", .{keyFileName});
 
     comptime switch (valueType) {
@@ -221,7 +227,7 @@ pub fn ReadValue(hKey: HKEY, comptime valueType: RegisteryValueType, ptr: regTyp
 pub const ReadRegistryValueError = error{
     RegOpenKeyExWFailed,
     RegQueryValueExWFailed,
-    FailedToConvertToUtf8,
+    InvalidUtf8,
 };
 
 const testing = std.testing;

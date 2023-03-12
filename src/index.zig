@@ -7,7 +7,19 @@ pub const Release = struct {
     date: []const u8,
     docs: []const u8,
     stdDocs: ?[]const u8,
-    archives: std.ArrayList(Archive),
+    archives: []Archive,
+
+    pub fn format(self: Release, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+
+        try std.json.stringify(
+            self,
+            .{ .whitespace = .{
+                .indent = if (options.width) |w| .{ .Space = @intCast(u8, @min(w, std.math.maxInt(u8))) } else .{ .None = {} },
+            } },
+            writer,
+        );
+    }
 };
 
 pub const Archive = struct {
@@ -15,27 +27,44 @@ pub const Archive = struct {
     shasum: []const u8,
     size: u32,
     target: []const u8,
+
+    pub fn format(self: Archive, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt;
+
+        try std.json.stringify(
+            self,
+            .{ .whitespace = .{
+                .indent = if (options.width) |w| .{ .Space = @intCast(u8, @min(w, std.math.maxInt(u8))) } else .{ .None = {} },
+            } },
+            writer,
+        );
+    }
 };
 
 pub const Index = struct {
-    releases: std.ArrayList(Release),
+    releases: []Release,
     allocator: std.mem.Allocator,
     tree: ?std.json.ValueTree,
 
     pub fn deinit(self: *Index) void {
-        for (self.releases.items) |release| {
-            release.archives.deinit();
+        for (self.releases) |release| {
+            self.allocator.free(release.archives);
         }
-        self.releases.deinit();
+        self.allocator.free(self.releases);
+
         if (self.tree) |_| self.tree.?.deinit();
     }
 };
 
-pub fn fetchIndex(allocator: std.mem.Allocator) anyerror!Index {
+pub fn fetchIndex(allocator: std.mem.Allocator) !Index {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
     const uri = comptime try std.Uri.parse("https://ziglang.org/download/index.json");
-    var req = try client.request(uri, .{}, .{});
+    var req = try client.request(
+        uri,
+        .{ .method = .GET, .connection = .close },
+        .{ .max_redirects = 0 },
+    );
     defer req.deinit();
 
     // 500 kb
@@ -106,35 +135,14 @@ fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
                 if (v.? != .String) return error.InvalidJson;
                 break :blk v.?.String;
             },
-            .archives = archives,
+            .archives = try archives.toOwnedSlice(),
         });
     }
     return Index{
-        .releases = arr,
+        .releases = try arr.toOwnedSlice(),
         .allocator = allocator,
         .tree = null,
     };
-}
-
-pub fn dumpRelease(channel: Release) void {
-    std.log.debug("channel: {{", .{});
-    std.log.debug("  channel: {s}", .{channel.channel});
-    std.log.debug("  version: {s}", .{channel.version});
-    std.log.debug("  date: {s}", .{channel.date});
-    std.log.debug("  docs: {s}", .{channel.docs});
-    if (channel.stdDocs) |stdDocs| {
-        std.log.debug("  stdDocs: {s}", .{stdDocs});
-    }
-    std.log.debug("  archives: {{", .{});
-    for (channel.archives.items) |archive| {
-        std.log.debug("    {{", .{});
-        std.log.debug("      target: {s}", .{archive.target});
-        std.log.debug("      tarball: {s}", .{archive.tarball});
-        std.log.debug("      shasum: {s}", .{archive.shasum});
-        std.log.debug("      size: {d}", .{archive.size});
-        std.log.debug("    }}", .{});
-    }
-    std.log.debug("}}", .{});
 }
 
 test "parse 2023-02-08.json" {
@@ -151,7 +159,7 @@ test "parse 2023-02-08.json" {
 
     // look for the "master" release
     var master: ?Release = null;
-    for (parsed.releases.items) |release| {
+    for (parsed.releases) |release| {
         if (std.mem.eql(u8, release.channel, "master")) {
             // only one master release
             try std.testing.expect(master == null);

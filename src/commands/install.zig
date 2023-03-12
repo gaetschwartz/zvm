@@ -47,9 +47,8 @@ pub fn install_cmd(ctx: RunContext) !void {
         return;
     }
 
-    std.log.debug("release for {s}: ", .{target});
-    idx.dumpRelease(release);
-    std.log.debug("\n", .{});
+    std.log.debug("release for {s}: \n{:4}", .{ target, release });
+
     const archive = archiveForTarget(release, target_string) orelse {
         try stdout.print("No archive for target {s}\n", .{target_string});
         return;
@@ -237,7 +236,7 @@ fn getFirstDirInDir(allocator: std.mem.Allocator, dir: []const u8) ![]const u8 {
 
 fn getLatestReleaseForChannel(index: Index, channel: []const u8) ?Release {
     var latest: ?Release = null;
-    for (index.releases.items) |entry| {
+    for (index.releases) |entry| {
         const isChannel = std.mem.eql(u8, entry.channel, channel);
         if (isChannel and (latest == null or std.mem.order(u8, entry.date, latest.?.date) == .gt)) {
             latest = entry;
@@ -247,7 +246,7 @@ fn getLatestReleaseForChannel(index: Index, channel: []const u8) ?Release {
 }
 
 fn getReleaseWithVersion(index: Index, version: []const u8) ?Release {
-    for (index.releases.items) |entry| {
+    for (index.releases) |entry| {
         if (std.mem.eql(u8, entry.version, version)) {
             return entry;
         }
@@ -263,7 +262,7 @@ fn getRelease(index: Index, target: []const u8, is_target_a_channel: *bool) ?Rel
 }
 
 fn archiveForTarget(release: Release, target: []const u8) ?Archive {
-    for (release.archives.items) |archive| {
+    for (release.archives) |archive| {
         if (std.mem.eql(u8, archive.target, target)) {
             return archive;
         }
@@ -390,7 +389,11 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     var client = std.http.Client{ .allocator = args.allocator };
     defer client.deinit();
     var uri = try std.Uri.parse(args.url);
-    var req = try client.request(uri, .{}, .{});
+    var req = try client.request(
+        uri,
+        .{ .method = .GET, .connection = .close },
+        .{ .max_redirects = 0 },
+    );
     defer req.deinit();
 
     var total_read: usize = 0;
@@ -507,7 +510,7 @@ pub fn IndexCompleter(comptime doShowVerions: bool) type {
             var channels = std.StringHashMap(bool).init(ctx.allocator);
             defer channels.deinit();
 
-            for (index.releases.items) |release| {
+            for (index.releases) |release| {
                 if (doShowVerions) {
                     try completions.append(.{ .name = release.version, .description = release.channel });
                 }
