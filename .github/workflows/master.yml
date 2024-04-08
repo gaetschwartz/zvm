@@ -17,6 +17,8 @@ jobs:
           submodules: true
           fetch-depth: 0
       - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
       - run: zig build test
   build:
     strategy:
