@@ -64,22 +64,20 @@ pub const Color = struct {
 
 /// Accepts an enum literal representing a color or a struct with enum literals as fields.
 pub fn c(comptime colors: anytype) []const u8 {
-    comptime {
-        const type_info = @typeInfo(@TypeOf(colors));
-        if (@TypeOf(colors) == Color) {
-            return colorOf(colors);
-        }
-        switch (type_info) {
-            .Struct => {
-                const fields = type_info.Struct.fields;
-                var temp: []const u8 = "";
-                for (fields) |field| {
-                    temp = temp ++ colorOf(@field(colors, field.name));
-                }
-                return temp;
-            },
-            else => return colorOf(colors),
-        }
+    const type_info = @typeInfo(@TypeOf(colors));
+    if (@TypeOf(colors) == Color) {
+        return comptime colorOf(colors);
+    }
+    switch (type_info) {
+        .Struct => {
+            const fields = type_info.Struct.fields;
+            var temp: []const u8 = "";
+            inline for (fields) |field| {
+                temp = temp ++ colorOf(@field(colors, field.name));
+            }
+            return temp;
+        },
+        else => return comptime colorOf(colors),
     }
 }
 
@@ -103,7 +101,8 @@ fn colorOf(comptime color: anytype) []const u8 {
             // if tagname looks like fg_0x123456 or bg_0x123456, then we need to convert it to a string
             const isHexColor = comptime std.mem.startsWith(u8, tagName, "fg_0x") or std.mem.startsWith(u8, tagName, "bg_0x");
             if (isHexColor) {
-                const n = std.fmt.parseInt(u24, tagName[5..], 16) catch @compileError("Invalid hex color: " ++ tagName);
+                const coloru24 = tagName[5..];
+                const n = std.fmt.parseUnsigned(u24, coloru24, 16) catch @compileError("Invalid hex color: " ++ tagName);
                 const r = n >> 16;
                 const g = (n >> 8) & 0xff;
                 const b = n & 0xff;
@@ -137,6 +136,32 @@ fn colorOf(comptime color: anytype) []const u8 {
     ++ allowedColors ++ "}\n" ++
         \\2. A Color struct Color{ .layer = .fg, .color = 0x123456 }
     );
+}
+
+const ParseRes = union(enum) {
+    res: u24,
+    err: enum {
+        InvalidCharacter,
+    },
+};
+
+fn parseHexColor(comptime color: []const u8) ParseRes {
+    var n: u24 = 0;
+    inline for (color) |char| {
+        n = n << 4;
+        if (char >= '0' and char <= '9') {
+            n = n | @as(u24, char - '0');
+        } else if (char >= 'a' and char <= 'f') {
+            n = n | @as(u24, char - 'a' + 10);
+        } else if (char >= 'A' and char <= 'F') {
+            n = n | @as(u24, char - 'A' + 10);
+        } else {
+            // @compileLog("Invalid character in color: ", char);
+            return ParseRes{ .err = .InvalidCharacter };
+        }
+    }
+    // @compileLog("color: ", color, " n = ", n);
+    return ParseRes{ .res = n };
 }
 
 /// Accepts an enum literal representing a color or a struct with enum literals as fields.

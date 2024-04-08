@@ -58,7 +58,7 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     var it = dir.iterate();
 
     while (try it.next()) |entry| {
-        if (entry.kind != .Directory) continue;
+        if (entry.kind != .directory) continue;
         const version_info_path = try path.join(allocator, &[_][]const u8{ versions, entry.name, ".zvm.json" });
         const version = readVersionInfo(allocator, version_info_path) catch |err| {
             switch (err) {
@@ -93,8 +93,10 @@ fn printGitVersion(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path
     std.log.debug("started printGitVersion", .{});
     const stdout = std.io.getStdOut().writer();
     // ? get current config and check if there is a git path setup
-    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
-    defer config.freeConfig(allocator, cfg);
+    const parsed = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    defer config.freeConfig(parsed);
+    const cfg = parsed.value;
+
     if (cfg.git_dir_path) |git_dir_path| {
         blk: {
             std.log.debug("git_dir_path: {s}", .{git_dir_path});
@@ -111,7 +113,7 @@ fn printGitVersion(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path
                 }
             };
 
-            if (stat.kind != .File) {
+            if (stat.kind != .file) {
                 std.log.err("zig is not a file in git_dir_path ({s})", .{git_dir_path});
                 break :blk;
             }
@@ -148,15 +150,16 @@ pub fn readVersionInfo(allocator: std.mem.Allocator, version_path: []const u8) !
     const file_size = try file.getEndPos();
     // check that the file size can fit in u32
     if (file_size > std.math.maxInt(u32)) return error.FileTooLarge;
-    var buffer = try allocator.alloc(u8, @intCast(u32, file_size));
+    var buffer = try allocator.alloc(u8, @intCast(file_size));
     defer allocator.free(buffer);
     _ = try file.readAll(buffer[0..]);
 
     // parse the json
-    var stream = std.json.TokenStream.init(buffer);
-    const version = try std.json.parse(VersionInfo, &stream, .{
-        .allocator = allocator,
-        .ignore_unknown_fields = true,
-    });
-    return version;
+    const version = try std.json.parseFromSlice(
+        VersionInfo,
+        allocator,
+        buffer,
+        .{ .ignore_unknown_fields = true },
+    );
+    return version.value;
 }

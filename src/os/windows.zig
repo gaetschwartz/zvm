@@ -29,13 +29,13 @@ pub fn IsConsoleOutputCP(code_page: CodePageIdentifier) bool {
         @compileError("windowsHasChcp65001 is only implemented for Windows");
     }
     const chcp = GetConsoleOutputCP();
-    return chcp == @enumToInt(code_page);
+    return chcp == @intFromEnum(code_page);
 }
 
 const SET_CONSOLE_OUTPUT_CP_FAILURE = 0;
 
 pub fn SetConsoleOutputCP(code_page: CodePageIdentifier) bool {
-    return SetConsoleOutputCPImpl(@enumToInt(code_page));
+    return SetConsoleOutputCPImpl(@intFromEnum(code_page));
 }
 
 fn SetConsoleOutputCPImpl(code_page: c_uint) bool {
@@ -140,7 +140,7 @@ pub fn ReadValueSimple(hKey: HKEY, comptime valueType: RegisteryValueType, path:
         keyFile,
         null,
         null,
-        @ptrCast(*BYTE, &lpData),
+        @ptrCast(&lpData),
         &lpcbData,
     );
     if (result2 != ERROR_SUCCESS) {
@@ -214,7 +214,7 @@ pub fn ReadValue(hKey: HKEY, comptime valueType: RegisteryValueType, ptr: regTyp
         keyFile,
         null,
         null,
-        @ptrCast(*BYTE, ptr),
+        @ptrCast(ptr),
         lpcbData,
     );
     std.log.debug("lpcbData is now {d}", .{lpcbData.*});
@@ -252,7 +252,7 @@ test "ConsoleOutputCP" {
     const result = SetConsoleOutputCP(.utf8);
     try testing.expect(result);
     const cp2 = GetConsoleOutputCP();
-    try testing.expect(cp2 == @enumToInt(CodePageIdentifier.utf8));
+    try testing.expect(cp2 == @intFromEnum(CodePageIdentifier.utf8));
 
     // set an invalid code page
     const resul3 = SetConsoleOutputCPImpl(0);

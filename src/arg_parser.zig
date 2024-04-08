@@ -485,7 +485,7 @@ pub const Command = struct {
             }
             const buf = try self.allocator.alloc(u8, max_len);
             defer self.allocator.free(buf);
-            std.mem.set(u8, buf, ' ');
+            @memset(buf, ' ');
             for (self.commands.items) |c| {
                 if (c.hidden) continue;
                 const spaces = buf[0 .. max_len - c.name.len];
@@ -504,7 +504,7 @@ pub const Command = struct {
             }
             const buf = try self.allocator.alloc(u8, max_len);
             defer self.allocator.free(buf);
-            std.mem.set(u8, buf, ' ');
+            @memset(buf, ' ');
 
             try writer.print("Flags:\n", .{});
             for (self.flags) |flag| {
@@ -551,11 +551,11 @@ pub const Command = struct {
         pub fn hash(self: Flag) u32 {
             var h: u32 = 0;
             if (self.name) |name| {
-                h ^= @bitCast(u32, name);
+                h ^= @bitCast(name);
             }
             if (self.long_name) |long_name| {
                 for (long_name) |c| {
-                    h ^= @bitCast(u32, c);
+                    h ^= @bitCast(c);
                 }
             }
             return h;
@@ -572,11 +572,11 @@ pub const Command = struct {
         pub fn hash(self: Option) u32 {
             var h: u32 = 0;
             if (self.name) |name| {
-                h ^= @bitCast(u32, name);
+                h ^= @bitCast(name);
             }
             if (self.long_name) |long_name| {
                 for (long_name) |c| {
-                    h ^= @bitCast(u32, c);
+                    h ^= @bitCast(c);
                 }
             }
             return h;
@@ -750,7 +750,7 @@ fn getDeepHashFn(comptime K: type, comptime Context: type) (fn (Context, K) u32)
             _ = ctx;
             var hasher = std.hash.Wyhash.init(0);
             std.hash.autoHashStrat(&hasher, key, .DeepRecursive);
-            return @truncate(u32, hasher.final());
+            return @truncate(hasher.final());
         }
     }.hash;
 }

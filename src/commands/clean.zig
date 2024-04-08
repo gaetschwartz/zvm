@@ -55,7 +55,7 @@ pub fn clean_cmd(ctx: ArgParser.RunContext) !void {
         defer cache_dir.close();
         break :blk try dirSize(cache_dir);
     };
-    const human_size = HumanSize(f64).compute(@intToFloat(f64, res.size));
+    const human_size = HumanSize(f64).compute(@floatFromInt(res.size));
 
     try stdout.print(ansi.style("Cleaned " ++ ansi.bold("{d:.2} {s}") ++ ".\n", .green), .{ human_size.value, human_size.unit });
 }

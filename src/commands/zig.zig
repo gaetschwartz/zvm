@@ -50,7 +50,11 @@ pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
         else => |e| return e,
     };
 
-    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    const parsed = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    defer parsed.deinit();
+
+    const cfg = parsed.value;
+
     var zig_path: []const u8 = undefined;
     if (cfg.git_dir_path) |git_dir_path| {
         std.log.debug("git_dir_path: {s}", .{git_dir_path});

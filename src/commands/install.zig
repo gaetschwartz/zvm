@@ -215,7 +215,7 @@ fn getFirstDirInDir(allocator: std.mem.Allocator, dir: []const u8) ![]const u8 {
     var dir_it = dir_file.iterate();
     var found: ?[]const u8 = null;
     while (try dir_it.next()) |entry| {
-        if (entry.kind == .Directory) {
+        if (entry.kind == .directory) {
             if (builtin.mode != .Debug) {
                 if (found != null) {
                     return error.MultipleDirectoriesFound;
@@ -299,7 +299,7 @@ fn fetchArchiveChildProcess(args: FetchArchiveArgs) !void {
     };
 }
 
-pub fn handleResult(res: std.ChildProcess.Term, cmd: [][]const u8) !void {
+pub fn handleResult(res: std.ChildProcess.Term, cmd: []const []const u8) !void {
     switch (res) {
         .Exited => |code| {
             if (code != 0) {
@@ -379,7 +379,7 @@ fn unarchiveTarXz(path: []const u8, dest: []const u8, allocator: std.mem.Allocat
 
 pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     const stdout = std.io.getStdOut().writer();
-    const total_human = utils.HumanSize(f64).compute(@intToFloat(f64, args.total_size));
+    const total_human = utils.HumanSize(f64).compute(@floatFromInt(args.total_size));
 
     // check if the file exists
     var file = try std.fs.createFileAbsolute(args.path, .{});
@@ -390,8 +390,9 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     defer client.deinit();
     var uri = try std.Uri.parse(args.url);
     var req = try client.request(
+        .GET,
         uri,
-        .{ .method = .GET, .connection = .close },
+        http.Headers.init(args.allocator),
         .{ .max_redirects = 0 },
     );
     defer req.deinit();
@@ -416,16 +417,16 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
         // only draw if 100ms have passed
         if (elapsed - last_draw >= 1000 / progressBarFps) {
             last_draw = elapsed;
-            const rate = @intToFloat(f64, 1000 * total_read) / @intToFloat(f64, elapsed);
+            const rate: f64 = @as(f64, @floatFromInt(1000 * total_read)) / @as(f64, @floatFromInt(elapsed));
             const human_rate = utils.HumanSize(f64).compute(rate);
 
-            const done = @intToFloat(f64, total_read * progressBarwidth) / @intToFloat(f64, args.total_size);
+            const done = @as(f64, @floatFromInt(total_read * progressBarwidth)) / @as(f64, @floatFromInt(args.total_size));
             var buf: [progressBarwidth]u16 = undefined;
-            const doneInt = @floatToInt(usize, @floor(done));
-            std.mem.set(u16, buf[0..doneInt], '█');
+            const doneInt = @as(usize, @intFromFloat(@floor(done)));
+            @memset(buf[0..doneInt], '█');
             if (doneInt < buf.len) {
-                buf[doneInt] = blocks[@floatToInt(usize, (done - @intToFloat(f64, doneInt)) * @intToFloat(f64, blocks.len))];
-                std.mem.set(u16, buf[doneInt + 1 ..], ' ');
+                buf[doneInt] = blocks[@as(usize, @intFromFloat((done - @as(f64, @floatFromInt(doneInt))) * @as(f64, @floatFromInt(blocks.len))))];
+                @memset(buf[doneInt + 1 ..], ' ');
             }
             const sep = comptime ansi.fade("|");
             try stdout.print(ansi.style(ansi.CLEAR_LINE ++ sep ++ "{s}" ++ sep ++ ansi.bold(" {d:.0} {s}/s"), .blue), .{ std.unicode.fmtUtf16le(&buf), human_rate.value, human_rate.unit });
@@ -435,12 +436,12 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
     }
     const end = std.time.milliTimestamp();
     const delta = end - start;
-    try stdout.print(ansi.style(ansi.CLEAR_LINE ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @intToFloat(f64, delta) / 1000 });
+    try stdout.print(ansi.style(ansi.CLEAR_LINE ++ "Downloaded " ++ ansi.bold("{d:.1} {s}") ++ " in " ++ ansi.bold("{d:.1}s") ++ ".\n", .blue), .{ total_human.value, total_human.unit, @as(f64, @floatFromInt(delta)) / 1000 });
 
     try file.sync();
 }
 
-inline fn printArgv(argv: [][]const u8) void {
+inline fn printArgv(argv: []const []const u8) void {
     for (argv) |arg| {
         std.debug.print("{s} ", .{arg});
     }

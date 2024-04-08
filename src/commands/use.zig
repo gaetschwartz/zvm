@@ -175,16 +175,19 @@ pub fn version_complete(ctx: Command.CompletionContext) !std.ArrayList(Command.C
     defer dir.close();
     var iter = dir.iterate();
 
-    const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    const parsed = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+    defer config.freeConfig(parsed);
+
+    const cfg = parsed.value;
+
     if (cfg.git_dir_path) |_| {
         try completions.append(Command.Completion{
             .name = "git",
         });
     }
-    defer config.freeConfig(allocator, cfg);
 
     while (try iter.next()) |entry| {
-        if (entry.kind == .Directory) {
+        if (entry.kind == .directory) {
             try completions.append(Command.Completion{
                 .name = entry.name,
             });
@@ -197,8 +200,9 @@ pub fn getTargetPath(allocator: std.mem.Allocator, zvm: []const u8, target: []co
     const stderr = std.io.getStdErr().writer();
 
     if (std.mem.eql(u8, target, "git")) {
-        const cfg = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
-        defer config.freeConfig(allocator, cfg);
+        const parsed = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
+        defer config.freeConfig(parsed);
+        const cfg = parsed.value;
 
         if (cfg.git_dir_path) |git_dir_path| {
             std.log.debug("git_dir_path: {s}", .{git_dir_path});

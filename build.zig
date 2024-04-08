@@ -1,12 +1,12 @@
 const std = @import("std");
 const builtin = @import("builtin");
 
-const zvm_version = std.builtin.Version.parse("0.2.13") catch unreachable;
+const zvm_version = std.SemanticVersion.parse("0.2.14") catch unreachable;
 
 pub fn build(b: *std.Build) void {
     comptime {
         const current_zig = builtin.zig_version;
-        const min_zig = std.SemanticVersion.parse("0.11.0-dev.1893+277015960") catch unreachable;
+        const min_zig = std.SemanticVersion.parse("0.11.0") catch unreachable;
         if (current_zig.order(min_zig) == .lt) {
             @compileError(std.fmt.comptimePrint("Your Zig version v{} does not meet the minimum build requirement of v{}", .{ current_zig, min_zig }));
         }
@@ -58,7 +58,7 @@ pub fn build(b: *std.Build) void {
     zvm.addModule("known-folders", known_folders_module);
     zvm.addModule("ansi", ansi_module);
     zvm.addOptions("zvm_build_options", options);
-    zvm.install();
+    b.installArtifact(zvm);
 
     const run_cmd = b.addRunArtifact(zvm);
     run_cmd.step.dependOn(b.getInstallStep());

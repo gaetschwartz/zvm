@@ -17,7 +17,7 @@ pub const ZvmConfig = struct {
         _ = fmt;
         _ = options;
         // json stringify
-        try std.json.stringify(self, .{ .whitespace = .{ .indent = .None } }, writer);
+        try std.json.stringify(self, .{}, writer);
     }
 };
 
@@ -51,8 +51,9 @@ pub fn config_cmd(ctx: ArgParser.RunContext) !void {
 
     if (std.mem.eql(u8, ctx.command.name, "config")) {
         // print the config
-        const cfg = try readConfig(.{ .allocator = allocator, .zvm_path = zvm });
-        defer freeConfig(allocator, cfg);
+        const parsed = try readConfig(.{ .allocator = allocator, .zvm_path = zvm });
+        defer freeConfig(parsed);
+        const cfg = parsed.value;
 
         if (@import("builtin").mode == .Debug) {
             std.log.debug("config: {any}", .{cfg});
@@ -101,8 +102,9 @@ pub fn config_cmd(ctx: ArgParser.RunContext) !void {
         }
     } else if (std.mem.eql(u8, ctx.command.name, "set")) {
         // set the config
-        const cfg = try readConfig(.{ .allocator = allocator, .zvm_path = zvm });
-        defer freeConfig(allocator, cfg);
+        const parsed = try readConfig(.{ .allocator = allocator, .zvm_path = zvm });
+        defer freeConfig(parsed);
+        const cfg = parsed.value;
 
         const key = ctx.getPositional("key").?;
         const value = ctx.getPositional("value");
@@ -148,13 +150,19 @@ const Context = struct {
     zvm_path: []const u8,
 };
 
-pub fn readConfig(context: Context) !ZvmConfig {
+pub fn readConfig(context: Context) !std.json.Parsed(ZvmConfig) {
     const zvm = context.zvm_path;
     const config_path = try std.fs.path.join(context.allocator, &[_][]const u8{ zvm, "config.json" });
     defer context.allocator.free(config_path);
 
     const file = std.fs.openFileAbsolute(config_path, .{}) catch |err| switch (err) {
-        error.FileNotFound => return ZvmConfig.default,
+        error.FileNotFound => {
+            var arena = std.heap.ArenaAllocator.init(context.allocator);
+            return std.json.Parsed(ZvmConfig){
+                .value = ZvmConfig.default,
+                .arena = &arena,
+            };
+        },
         else => return err,
     };
     defer file.close();
@@ -163,21 +171,19 @@ pub fn readConfig(context: Context) !ZvmConfig {
     const file_size = try file.getEndPos();
     // check that the file size can fit in u32
     if (file_size > std.math.maxInt(u32)) return error.FileTooLarge;
-    var buffer = try context.allocator.alloc(u8, @intCast(u32, file_size));
+    var buffer = try context.allocator.alloc(u8, @intCast(file_size));
     defer context.allocator.free(buffer);
     _ = try file.readAll(buffer[0..]);
 
     // parse the json
-    var stream = std.json.TokenStream.init(buffer);
-    const cfg = try std.json.parse(ZvmConfig, &stream, .{
-        .allocator = context.allocator,
+    const cfg = try std.json.parseFromSlice(ZvmConfig, context.allocator, buffer[0..], .{
         .ignore_unknown_fields = true,
     });
     return cfg;
 }
 
-pub fn freeConfig(allocator: std.mem.Allocator, cfg: ZvmConfig) void {
-    std.json.parseFree(ZvmConfig, cfg, .{ .allocator = allocator });
+pub fn freeConfig(parsed: std.json.Parsed(ZvmConfig)) void {
+    parsed.deinit();
 }
 
 pub fn writeConfig(context: Context, config: ZvmConfig) !void {

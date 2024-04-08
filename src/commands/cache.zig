@@ -48,7 +48,7 @@ pub fn cache_size_cmd(ctx: ArgParser.RunContext) !void {
     };
 
     const info = try dirSize(cache_dir);
-    const human_size = HumanSize(f64).compute(@intToFloat(f64, info.size));
+    const human_size = HumanSize(f64).compute(@floatFromInt(info.size));
     try stdout.print(ansi.style("Total: " ++ ansi.bold("{d}") ++ " files, " ++ ansi.bold("{d:.1} {s}") ++ "\n", .cyan), .{ info.files, human_size.value, human_size.unit });
 }
 
@@ -67,7 +67,7 @@ pub fn dirSize(dir: std.fs.IterableDir) !DirSizeResult {
     var iter = dir.iterate();
     while (try iter.next()) |entry| {
         switch (entry.kind) {
-            .Directory => {
+            .directory => {
                 var sub_dir = try dir.dir.openIterableDir(entry.name, .{});
                 defer sub_dir.close();
                 const info = try dirSize(sub_dir);
@@ -76,7 +76,7 @@ pub fn dirSize(dir: std.fs.IterableDir) !DirSizeResult {
                     .files = total.files + info.files,
                 };
             },
-            .File => {
+            .file => {
                 if (ignoreFile(entry.name)) continue;
                 const stat = try dir.dir.statFile(entry.name);
                 total = .{

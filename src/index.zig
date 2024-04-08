@@ -10,13 +10,11 @@ pub const Release = struct {
     archives: []Archive,
 
     pub fn format(self: Release, comptime fmt: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = options;
         _ = fmt;
-
         try std.json.stringify(
             self,
-            .{ .whitespace = .{
-                .indent = if (options.width) |w| .{ .Space = @intCast(u8, @min(w, std.math.maxInt(u8))) } else .{ .None = {} },
-            } },
+            .{ .whitespace = .minified },
             writer,
         );
     }
@@ -34,7 +32,7 @@ pub const Archive = struct {
         try std.json.stringify(
             self,
             .{ .whitespace = .{
-                .indent = if (options.width) |w| .{ .Space = @intCast(u8, @min(w, std.math.maxInt(u8))) } else .{ .None = {} },
+                .indent = if (options.width) |w| .{ .Space = @intCast(@min(w, std.math.maxInt(u8))) } else .{ .None = {} },
             } },
             writer,
         );
@@ -44,7 +42,7 @@ pub const Archive = struct {
 pub const Index = struct {
     releases: []Release,
     allocator: std.mem.Allocator,
-    tree: ?std.json.ValueTree,
+    tree: ?std.json.Parsed(Value),
 
     pub fn deinit(self: *Index) void {
         for (self.releases) |release| {
@@ -60,10 +58,12 @@ pub fn fetchIndex(allocator: std.mem.Allocator) !Index {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
     const uri = comptime try std.Uri.parse("https://ziglang.org/download/index.json");
+    const headers = http.Headers.init(allocator);
     var req = try client.request(
+        .GET,
         uri,
-        .{ .method = .GET, .connection = .close },
-        .{ .max_redirects = 0 },
+        headers,
+        .{},
     );
     defer req.deinit();
 
@@ -74,15 +74,10 @@ pub fn fetchIndex(allocator: std.mem.Allocator) !Index {
 
     std.log.debug("total read: {d}\n", .{total_read});
 
-    // var token_stream = std.json.TokenStream.init(array.items[0..total_read]);
-    var parser = std.json.Parser.init(allocator, true);
-    defer parser.deinit();
-    var tree = try parser.parse(buffer[0..total_read]);
+    var tree = try std.json.parseFromSlice(Value, allocator, buffer[0..total_read], .{});
     // ! we dont want to deinit the tree because it would free all the strings
 
-    // std.log.debug("index:", .{});
-    // tree.root.dump();
-    var result = try parseTree(allocator, &tree.root);
+    var result = try parseTree(allocator, &tree.value);
     result.tree = tree;
     return result;
 }
@@ -92,31 +87,31 @@ const Value = std.json.Value;
 fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
     var arr = std.ArrayList(Release).init(allocator);
     // iterate over the keys of the root object
-    if (tree.* != Value.Object) return error.InvalidJson;
-    var rootObject: std.StringArrayHashMap(Value) = tree.Object;
+    if (tree.* != Value.object) return error.InvalidJson;
+    var rootObject: std.StringArrayHashMap(Value) = tree.object;
     for (rootObject.keys()) |key| {
         const val = rootObject.get(key) orelse unreachable;
         // std.log.debug("parsing Value.{s} : ", .{std.meta.tagName(val)});
         //val.dump();
         // std.log.debug("\n", .{});
 
-        if (val != .Object) return error.InvalidJson;
-        const obj: std.json.ObjectMap = val.Object;
+        if (val != .object) return error.InvalidJson;
+        const obj: std.json.ObjectMap = val.object;
         // print all keys of the object
         const version = blk: {
             const v = obj.get("version") orelse break :blk key;
-            if (v != .String) return error.InvalidJson;
-            break :blk v.String;
+            if (v != .string) return error.InvalidJson;
+            break :blk v.string;
         };
         var archives = std.ArrayList(Archive).init(allocator);
         // iterate through all the key-value pairs of the object and only treat the ObjectMap ones
         for (obj.keys()) |key2| {
             const val2 = obj.get(key2) orelse unreachable;
-            if (val2 != .Object) continue;
-            const obj2: std.json.ObjectMap = val2.Object;
-            const tarball = (obj2.get("tarball") orelse return error.InvalidJson).String;
-            const shasum = (obj2.get("shasum") orelse return error.InvalidJson).String;
-            const size = (obj2.get("size") orelse return error.InvalidJson).String;
+            if (val2 != .object) continue;
+            const obj2: std.json.ObjectMap = val2.object;
+            const tarball = (obj2.get("tarball") orelse return error.InvalidJson).string;
+            const shasum = (obj2.get("shasum") orelse return error.InvalidJson).string;
+            const size = (obj2.get("size") orelse return error.InvalidJson).string;
             try archives.append(Archive{
                 .tarball = tarball,
                 .shasum = shasum,
@@ -127,13 +122,13 @@ fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
         try arr.append(Release{
             .channel = if (obj.get("version") != null) key else "stable",
             .version = version,
-            .date = (obj.get("date") orelse return error.InvalidJson).String,
-            .docs = (obj.get("docs") orelse return error.InvalidJson).String,
+            .date = (obj.get("date") orelse return error.InvalidJson).string,
+            .docs = (obj.get("docs") orelse return error.InvalidJson).string,
             .stdDocs = blk: {
                 const v = obj.get("stdDocs");
                 if (v == null) break :blk null;
-                if (v.? != .String) return error.InvalidJson;
-                break :blk v.?.String;
+                if (v.? != .string) return error.InvalidJson;
+                break :blk v.?.string;
             },
             .archives = try archives.toOwnedSlice(),
         });
@@ -146,15 +141,17 @@ fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
 }
 
 test "parse 2023-02-08.json" {
-    // var token_stream = std.json.TokenStream.init(array.items[0..total_read]);
-    var parser = std.json.Parser.init(std.testing.allocator, true);
-    defer parser.deinit();
-    var tree = try parser.parse(@embedFile("test_data/2023-02-08.json"));
+    var tree = try std.json.parseFromSlice(
+        Value,
+        std.testing.allocator,
+        @embedFile("test_data/2023-02-08.json"),
+        .{},
+    );
     defer tree.deinit();
 
     // std.log.debug("index:", .{});
     // tree.root.dump();
-    var parsed = try parseTree(std.testing.allocator, &tree.root);
+    var parsed = try parseTree(std.testing.allocator, &tree.value);
     defer parsed.deinit();
 
     // look for the "master" release
