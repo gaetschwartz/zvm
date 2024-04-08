@@ -27,4 +27,4 @@ jobs:
       - name: Push the changes
         working-directory: scoop-zvm
         run: |
-          git push https://${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}@github.com/gaetschwartz/scoop-zvm.git HEAD:main
+          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/gaetschwartz/scoop-zvm.git HEAD:main
