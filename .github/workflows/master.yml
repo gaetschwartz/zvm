@@ -34,6 +34,8 @@ jobs:
         with:
           submodules: true
       - uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
       - run: zig build -Doptimize=ReleaseSafe -Dtarget=${{matrix.target}}
       - name: Rename binary
         if: ${{ !endsWith(matrix.target, '-windows') }}
