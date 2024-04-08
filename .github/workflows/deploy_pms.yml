@@ -18,15 +18,13 @@ jobs:
         run: scoop/bin/checkver.ps1 -Update -ForceUpdate scoop-zvm/zvm.json
       - name: Commit the changes to zvm.json
         working-directory: scoop-zvm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add zvm.json
           $tag_name = (Get-Content .\zvm.json -Raw | ConvertFrom-Json).version
           git commit -m "Update zvm to $tag_name"
-          git remote set-url --push origin https://gaetschwartz:$GITHUB_TOKEN@github.com/gaetschwartz/scoop-zvm.git
+          git remote set-url --push origin https://gaetschwartz:${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}@github.com/gaetschwartz/scoop-zvm.git
       - name: Push the changes
         working-directory: scoop-zvm
         run: git push
@@ -48,15 +46,13 @@ jobs:
           python zvm-repo/ci/update_formula.py zvm homebrew-zvm/zvm.rb
       - name: Commit the changes to zvm.rb
         working-directory: homebrew-zvm
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
           git add zvm.rb
           tag_name=$(brew livecheck --json zvm | jq ".[0].version.latest" -r)
           git commit -m "Update zvm to $tag_name"
-          git remote set-url --push origin https://gaetschwartz:$GITHUB_TOKEN@github.com/gaetschwartz/homebrew-zvm.git
+          git remote set-url --push origin https://gaetschwartz:${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}@github.com/gaetschwartz/homebrew-zvm.git
       - name: Push the changes
         working-directory: homebrew-zvm
         run: git push
