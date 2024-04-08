@@ -4,8 +4,8 @@
 
     .dependencies = .{
         .known_folders = .{
-            .url = "https://github.com/ziglibs/known-folders/archive/bf79988adcfce166f848e4b11e718c1966365329.tar.gz",
-            .hash = "12201314cffeb40c5e4e3da166217d2c74628c74486414aaf97422bcd2279915b9fd",
+            .url = "https://github.com/ziglibs/known-folders/archive/8bb4bf761bab20ffed74ffac83c3a9eb4456f28d.tar.gz",
+            .hash = "122002462f37b67a54fa1ab712d870d4637dae0d94437c0077b148e1fb75616c573d",
         },
     },
 }
