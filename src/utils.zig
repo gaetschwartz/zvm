@@ -3,12 +3,15 @@ const known = @import("known-folders");
 const builtin = @import("builtin");
 const math = std.math;
 
-pub fn zvmDir(allocator: std.mem.Allocator) ![]const u8 {
-    const home = try known.getPath(allocator, .home) orelse
-        return error.UnableToFindHomeDirectory;
+pub const ZvmDirError = error{
+    UnableToFindHomeDirectory,
+};
+pub fn zvmDir(allocator: std.mem.Allocator) ZvmDirError![]const u8 {
+    const homeOrNull = known.getPath(allocator, .home) catch return error.UnableToFindHomeDirectory;
+    const home = homeOrNull orelse return error.UnableToFindHomeDirectory;
     defer allocator.free(home);
     std.log.debug("home: {s}", .{home});
-    return try std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm" });
+    return std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm" }) catch return ZvmDirError.UnableToFindHomeDirectory;
 }
 
 const ArchiveType = enum {

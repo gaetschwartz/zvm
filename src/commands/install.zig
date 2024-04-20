@@ -210,7 +210,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     try std.json.stringify(version_info, .{}, writer);
     std.log.debug("wrote version file to {s}", .{version_file_path});
 
-    try stdout.print(ansi.style("Successfully installed " ++ ansi.bold("{s}") ++ ".\n", .green), .{target});
+    try stdout.print(ansi.style("Successfully installed " ++ ansi.bold("{s}") ++ " to " ++ ansi.bold("{s}") ++ ".\n", .{ .green, .blue }), .{ release.version, version_path });
 }
 
 fn getFirstDirInDir(allocator: std.mem.Allocator, dir: []const u8) ![]const u8 {

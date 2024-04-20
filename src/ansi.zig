@@ -63,7 +63,7 @@ pub const Color = struct {
 };
 
 /// Accepts an enum literal representing a color or a struct with enum literals as fields.
-pub fn c(comptime colors: anytype) []const u8 {
+pub inline fn c(comptime colors: anytype) []const u8 {
     const type_info = @typeInfo(@TypeOf(colors));
     if (@TypeOf(colors) == Color) {
         return comptime colorOf(colors);

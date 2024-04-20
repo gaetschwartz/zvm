@@ -16,7 +16,7 @@ const destroy_cmd = @import("commands/destroy.zig").destroy_cmd;
 const config_cmd = @import("commands/config.zig").config_cmd;
 const gen_completions_cmd = @import("commands/completions.zig").gen_completions_cmd;
 const complete_config_keys = @import("commands/config.zig").complete_config_keys;
-const clean_cmd = @import("commands/clean.zig").clean_cmd;
+const setup_cmd = @import("commands/setup.zig").setup_cmd;
 const zvm_cmd = @import("main.zig").zvm_cmd;
 const zvmDir = @import("utils.zig").zvmDir;
 const path = std.fs.path;
@@ -352,29 +352,14 @@ pub inline fn createParser(allocator: std.mem.Allocator) !ArgParser {
     });
     // zvm clean command
     _ = try parser.addCommand(.{
-        .name = "clean",
-        .description = "Clean zig-cache directories",
-        .handler = &clean_cmd,
+        .name = "setup",
+        .description = "Setup zvm paths and more",
+        .handler = &setup_cmd,
         .flags = &[_]Command.Flag{
             .{
                 .name = 'v',
                 .long_name = "verbose",
                 .description = "show verbose output",
-                .optional = true,
-            },
-            // recursive
-            .{
-                .name = 'r',
-                .long_name = "recursive",
-                .description = "clean recursively",
-                .optional = true,
-            },
-        },
-        .positionals = &[_]Command.Positional{
-            .{
-                .name = "directory",
-                .description = "the directory to clean",
-                .optional = true,
             },
         },
     });

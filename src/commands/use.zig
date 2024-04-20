@@ -120,8 +120,9 @@ pub fn use_cmd(ctx: ArgParser.RunContext) !void {
                 break :blk false;
             };
             if (!found) {
-                try stdout.print(ansi.style("Warning: the path {s} is not in your PATH environment variable.\n", .{ .fade, .red }), .{global_version_path});
-                try stdout.print(ansi.style("You need to add it to your PATH environment variable to use zig globally.\n", .{ .fade, .red }), .{});
+                try stderr.print(ansi.style("Warning: the path {s} is not in your PATH environment variable.\n", .{ .fade, .red }), .{global_version_path});
+                try stderr.print(ansi.style("You need to add it to your PATH environment variable to use zig globally.\n", .{ .fade, .red }), .{});
+                try stderr.print(ansi.style("Use " ++ ansi.bold("zvm setup") ++ " to add it to your PATH.\n", .{.fade}), .{});
             } else {
                 std.log.debug("the path {s} is in your PATH environment variable.", .{global_version_path});
             }
