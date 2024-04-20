@@ -8,7 +8,6 @@ const utils = @import("../utils.zig");
 const zvmDir = utils.zvmDir;
 const RunContext = @import("../arg_parser.zig").ArgParser.RunContext;
 const VersionInfo = @import("list.zig").VersionInfo;
-const readVersionInfo = @import("list.zig").readVersionInfo;
 
 const Index = idx.Index;
 const Release = idx.Release;

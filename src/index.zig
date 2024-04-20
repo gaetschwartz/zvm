@@ -41,16 +41,10 @@ pub const Archive = struct {
 
 pub const Index = struct {
     releases: []Release,
-    allocator: std.mem.Allocator,
-    tree: ?std.json.Parsed(Value),
+    allocator: std.heap.ArenaAllocator,
 
     pub fn deinit(self: *Index) void {
-        for (self.releases) |release| {
-            self.allocator.free(release.archives);
-        }
-        self.allocator.free(self.releases);
-
-        if (self.tree) |_| self.tree.?.deinit();
+        self.allocator.deinit();
     }
 };
 
@@ -58,7 +52,8 @@ pub fn fetchIndex(allocator: std.mem.Allocator) !Index {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
     const uri = comptime try std.Uri.parse("https://ziglang.org/download/index.json");
-    const headers = http.Headers.init(allocator);
+    var headers = http.Headers.init(allocator);
+    defer headers.deinit();
     var req = try client.request(
         .GET,
         uri,
@@ -66,29 +61,43 @@ pub fn fetchIndex(allocator: std.mem.Allocator) !Index {
         .{},
     );
     defer req.deinit();
+    try req.start();
+    try req.finish();
+    try req.wait();
 
     // 500 kb
-    const BUFFER_SIZE = 1024 * 1024;
-    var buffer: [BUFFER_SIZE]u8 = undefined;
-    const total_read = try req.readAll(&buffer);
+    var buffer = std.ArrayList(u8).init(allocator);
+    defer buffer.deinit();
+
+    var total_read: usize = 0;
+    var temp: [4096]u8 = undefined;
+    while (true) {
+        const read = try req.read(temp[0..]);
+        if (read == 0) break;
+        total_read += read;
+        try buffer.appendSlice(temp[0..read]);
+    }
 
     std.log.debug("total read: {d}\n", .{total_read});
 
-    var tree = try std.json.parseFromSlice(Value, allocator, buffer[0..total_read], .{});
-    // ! we dont want to deinit the tree because it would free all the strings
+    var tree = try std.json.parseFromSlice(Value, allocator, buffer.items[0..total_read], .{});
+    defer tree.deinit();
 
-    var result = try parseTree(allocator, &tree.value);
-    result.tree = tree;
+    var result = try parseTree(allocator, tree);
+
     return result;
 }
 
 const Value = std.json.Value;
 
-fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
+fn parseTree(_allocator: std.mem.Allocator, tree: std.json.Parsed(Value)) !Index {
+    var arena = std.heap.ArenaAllocator.init(_allocator);
+    var allocator = arena.allocator();
     var arr = std.ArrayList(Release).init(allocator);
     // iterate over the keys of the root object
-    if (tree.* != Value.object) return error.InvalidJson;
-    var rootObject: std.StringArrayHashMap(Value) = tree.object;
+    const value = tree.value;
+    if (value != Value.object) return error.InvalidJson;
+    var rootObject = value.object;
     for (rootObject.keys()) |key| {
         const val = rootObject.get(key) orelse unreachable;
         // std.log.debug("parsing Value.{s} : ", .{std.meta.tagName(val)});
@@ -99,9 +108,13 @@ fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
         const obj: std.json.ObjectMap = val.object;
         // print all keys of the object
         const version = blk: {
-            const v = obj.get("version") orelse break :blk key;
-            if (v != .string) return error.InvalidJson;
-            break :blk v.string;
+            if (std.mem.eql(u8, key, "master")) {
+                const v = obj.get("version") orelse return error.InvalidJson;
+                if (v != .string) return error.InvalidJson;
+                break :blk v.string;
+            } else {
+                break :blk key;
+            }
         };
         var archives = std.ArrayList(Archive).init(allocator);
         // iterate through all the key-value pairs of the object and only treat the ObjectMap ones
@@ -113,30 +126,33 @@ fn parseTree(allocator: std.mem.Allocator, tree: *const Value) !Index {
             const shasum = (obj2.get("shasum") orelse return error.InvalidJson).string;
             const size = (obj2.get("size") orelse return error.InvalidJson).string;
             try archives.append(Archive{
-                .tarball = tarball,
-                .shasum = shasum,
+                .tarball = allocator.dupe(u8, tarball) catch return error.InvalidJson,
+                .shasum = allocator.dupe(u8, shasum) catch return error.InvalidJson,
                 .size = std.fmt.parseInt(u32, size, 10) catch return error.InvalidJson,
-                .target = key2,
+                .target = allocator.dupe(u8, key2) catch return error.InvalidJson,
             });
         }
+        const channel = if (std.mem.eql(u8, key, "master")) "master" else allocator.dupe(u8, key) catch return error.InvalidJson;
+        const date = (obj.get("date") orelse return error.InvalidJson).string;
+        const docs = (obj.get("docs") orelse return error.InvalidJson).string;
+        const stdDocs = blk: {
+            const v = obj.get("stdDocs");
+            if (v == null) break :blk null;
+            if (v.? != .string) return error.InvalidJson;
+            break :blk v.?.string;
+        };
         try arr.append(Release{
-            .channel = if (obj.get("version") != null) key else "stable",
-            .version = version,
-            .date = (obj.get("date") orelse return error.InvalidJson).string,
-            .docs = (obj.get("docs") orelse return error.InvalidJson).string,
-            .stdDocs = blk: {
-                const v = obj.get("stdDocs");
-                if (v == null) break :blk null;
-                if (v.? != .string) return error.InvalidJson;
-                break :blk v.?.string;
-            },
+            .channel = channel,
+            .version = allocator.dupe(u8, version) catch return error.InvalidJson,
+            .date = allocator.dupe(u8, date) catch return error.InvalidJson,
+            .docs = allocator.dupe(u8, docs) catch return error.InvalidJson,
+            .stdDocs = if (stdDocs) |sd| allocator.dupe(u8, sd) catch return error.InvalidJson else null,
             .archives = try archives.toOwnedSlice(),
         });
     }
     return Index{
         .releases = try arr.toOwnedSlice(),
-        .allocator = allocator,
-        .tree = null,
+        .allocator = arena,
     };
 }
 

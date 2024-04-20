@@ -16,8 +16,7 @@ pub const VersionInfo = struct {
 
 pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     _ = ctx;
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    var arena = std.heap.ArenaAllocator.init(gpa.allocator());
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     var allocator = arena.allocator();
     defer arena.deinit();
     const stdout = std.io.getStdOut().writer();
@@ -40,7 +39,7 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     };
     try stdout.print("Installed versions:\x0a", .{});
 
-    const printGitVersionThread = try std.Thread.spawn(.{}, printGitVersionThreaded, .{ allocator, zvm, symlinked_path });
+    const printGitVersionThread = try std.Thread.spawn(.{}, printGitVersionThreaded, .{ zvm, symlinked_path });
 
     const versions = try path.join(allocator, &[_][]const u8{ zvm, "versions" });
 
@@ -70,27 +69,30 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
                 else => return err,
             }
         };
+        defer version.deinit();
 
         const is_default = symlinked_path != null and std.mem.eql(u8, symlinked_path.?, std.fs.path.dirname(version_info_path).?);
         const startSymbol = if (is_default) (comptime ansi.c(.green) ++ ">") else comptime ansi.fade("-");
-        if (version.channel) |channel| {
-            try stdout.print("  {s} {s} " ++ ansi.fade("({s})\x0a") ++ ansi.c(.reset), .{ startSymbol, version.version, channel });
+        if (version.value.channel) |channel| {
+            try stdout.print("  {s} {s} " ++ ansi.fade("({s})\x0a") ++ ansi.c(.reset), .{ startSymbol, version.value.version, channel });
         } else {
-            try stdout.print("  {s} {s}\x0a" ++ ansi.c(.reset), .{ startSymbol, version.version });
+            try stdout.print("  {s} {s}\x0a" ++ ansi.c(.reset), .{ startSymbol, version.value.version });
         }
     }
 
     printGitVersionThread.join();
 }
 
-fn printGitVersionThreaded(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path: ?[]const u8) void {
-    printGitVersion(allocator, zvm, symlinked_path) catch |err| {
+fn printGitVersionThreaded(zvm: []const u8, symlinked_path: ?[]const u8) void {
+    printGitVersion(zvm, symlinked_path) catch |err| {
         std.log.err("error: {s}", .{@errorName(err)});
     };
 }
 
-fn printGitVersion(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path: ?[]const u8) !void {
+fn printGitVersion(zvm: []const u8, symlinked_path: ?[]const u8) !void {
     std.log.debug("started printGitVersion", .{});
+    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
+    var allocator = arena.allocator();
     const stdout = std.io.getStdOut().writer();
     // ? get current config and check if there is a git path setup
     const parsed = try config.readConfig(.{ .zvm_path = zvm, .allocator = allocator });
@@ -142,7 +144,7 @@ fn printGitVersion(allocator: std.mem.Allocator, zvm: []const u8, symlinked_path
     }
 }
 
-pub fn readVersionInfo(allocator: std.mem.Allocator, version_path: []const u8) !VersionInfo {
+pub fn readVersionInfo(allocator: std.mem.Allocator, version_path: []const u8) !std.json.Parsed(VersionInfo) {
     const file = try std.fs.openFileAbsolute(version_path, .{});
     defer file.close();
 
@@ -159,7 +161,7 @@ pub fn readVersionInfo(allocator: std.mem.Allocator, version_path: []const u8) !
         VersionInfo,
         allocator,
         buffer,
-        .{ .ignore_unknown_fields = true },
+        .{ .ignore_unknown_fields = true, .allocate = .alloc_always },
     );
-    return version.value;
+    return version;
 }

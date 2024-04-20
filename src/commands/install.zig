@@ -35,6 +35,10 @@ pub fn install_cmd(ctx: RunContext) !void {
 
     var index = try idx.fetchIndex(allocator);
 
+    var index_json = try std.json.stringifyAlloc(allocator, index.releases, .{});
+    defer allocator.free(index_json);
+    std.debug.print("index: {s}\n", .{index_json});
+
     var target_string = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) });
     std.log.debug("target string: {s}", .{target_string});
     var is_target_a_channel = true;
@@ -81,12 +85,13 @@ pub fn install_cmd(ctx: RunContext) !void {
             if (err == error.FileNotFound) break :blk;
             return err;
         };
+        defer version_info.deinit();
         if (force) {
             std.log.debug("force flag is set, removing old version", .{});
         }
 
         if (is_upgrade) {
-            if (std.mem.eql(u8, version_info.version, release.version) and !force) {
+            if (std.mem.eql(u8, version_info.value.version, release.version) and !force) {
                 try stdout.print(ansi.style("Already up to date.\n", .green), .{});
                 return;
             }
@@ -97,7 +102,7 @@ pub fn install_cmd(ctx: RunContext) !void {
             return;
         }
 
-        std.log.debug("version info: {}", .{version_info});
+        std.log.debug("version info: {}", .{version_info.value});
         std.log.debug("removing old version: {s}", .{version_path});
 
         try std.fs.deleteTreeAbsolute(version_path);
@@ -396,6 +401,9 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
         .{ .max_redirects = 0 },
     );
     defer req.deinit();
+    try req.start();
+    try req.finish();
+    try req.wait();
 
     var total_read: usize = 0;
     var temp_buffer: [32 * 1024]u8 = undefined;

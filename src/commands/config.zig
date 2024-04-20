@@ -157,11 +157,12 @@ pub fn readConfig(context: Context) !std.json.Parsed(ZvmConfig) {
 
     const file = std.fs.openFileAbsolute(config_path, .{}) catch |err| switch (err) {
         error.FileNotFound => {
-            var arena = std.heap.ArenaAllocator.init(context.allocator);
-            return std.json.Parsed(ZvmConfig){
-                .value = ZvmConfig.default,
-                .arena = &arena,
-            };
+            return std.json.parseFromSlice(
+                ZvmConfig,
+                context.allocator,
+                "{}",
+                .{ .allocate = .alloc_always },
+            );
         },
         else => return err,
     };
@@ -178,6 +179,7 @@ pub fn readConfig(context: Context) !std.json.Parsed(ZvmConfig) {
     // parse the json
     const cfg = try std.json.parseFromSlice(ZvmConfig, context.allocator, buffer[0..], .{
         .ignore_unknown_fields = true,
+        .allocate = .alloc_always,
     });
     return cfg;
 }
