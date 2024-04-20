@@ -33,13 +33,13 @@ pub fn install_cmd(ctx: RunContext) !void {
     const target = target_nullable.?;
     const is_upgrade = std.mem.eql(u8, ctx.command.name, "upgrade");
 
-    var index = try idx.fetchIndex(allocator);
+    const index = try idx.fetchIndex(allocator);
 
-    var index_json = try std.json.stringifyAlloc(allocator, index.releases, .{});
+    const index_json = try std.json.stringifyAlloc(allocator, index.releases, .{});
     defer allocator.free(index_json);
     std.debug.print("index: {s}\n", .{index_json});
 
-    var target_string = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) });
+    const target_string = try std.fmt.allocPrint(allocator, "{s}-{s}", .{ @tagName(builtin.target.cpu.arch), @tagName(builtin.target.os.tag) });
     std.log.debug("target string: {s}", .{target_string});
     var is_target_a_channel = true;
     const release = getRelease(index, target, &is_target_a_channel) orelse {
@@ -113,7 +113,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     std.log.debug("cache path: {s}", .{cache_path});
 
     // check if the archive is already in the cache
-    var is_cached = blk: {
+    const is_cached = blk: {
         const cached_archive = std.fs.openFileAbsolute(cache_path, .{}) catch |err| {
             if (err == error.FileNotFound) {
                 break :blk false;
@@ -206,7 +206,7 @@ pub fn install_cmd(ctx: RunContext) !void {
     };
     const version_file = try std.fs.createFileAbsolute(version_file_path, .{});
     defer version_file.close();
-    var writer = version_file.writer();
+    const writer = version_file.writer();
     try std.json.stringify(version_info, .{}, writer);
     std.log.debug("wrote version file to {s}", .{version_file_path});
 
@@ -393,7 +393,7 @@ pub fn fetchArchiveZig(args: FetchArchiveArgs) !void {
 
     var client = std.http.Client{ .allocator = args.allocator };
     defer client.deinit();
-    var uri = try std.Uri.parse(args.url);
+    const uri = try std.Uri.parse(args.url);
     var req = try client.request(
         .GET,
         uri,

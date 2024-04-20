@@ -207,7 +207,7 @@ pub fn ReadValue(hKey: HKEY, comptime valueType: RegisteryValueType, ptr: regTyp
         // if they are strings, return the length of the string pointed to by the pointer
         .REG_SZ, .REG_EXPAND_SZ, .REG_MULTI_SZ, .REG_BINARY, .REG_LINK => {},
     };
-    var lpcbData: *DWORD = len;
+    const lpcbData: *DWORD = len;
     std.log.debug("lpcbData is {d}", .{lpcbData.*});
     const result2 = std.os.windows.advapi32.RegQueryValueExW(
         key,

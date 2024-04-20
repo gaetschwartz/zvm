@@ -1,5 +1,4 @@
 const std = @import("std");
-const known = @import("known-folders");
 const builtin = @import("builtin");
 const math = std.math;
 
@@ -7,8 +6,10 @@ pub const ZvmDirError = error{
     UnableToFindHomeDirectory,
 };
 pub fn zvmDir(allocator: std.mem.Allocator) ZvmDirError![]const u8 {
-    const homeOrNull = known.getPath(allocator, .home) catch return error.UnableToFindHomeDirectory;
-    const home = homeOrNull orelse return error.UnableToFindHomeDirectory;
+    const home: []const u8 = switch (builtin.os.tag) {
+        .windows => .process.getEnvVarOwned(allocator, "USERPROFILE") catch return ZvmDirError.UnableToFindHomeDirectory,
+        else => std.process.getEnvVarOwned(allocator, "HOME") catch return ZvmDirError.UnableToFindHomeDirectory,
+    };
     defer allocator.free(home);
     std.log.debug("home: {s}", .{home});
     return std.fs.path.join(allocator, &[_][]const u8{ home, ".zvm" }) catch return ZvmDirError.UnableToFindHomeDirectory;

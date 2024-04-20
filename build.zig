@@ -43,21 +43,16 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "is_ci", isCi);
     options.addOption(?[DATE_SIZE]u8, "build_date", date(allocator) orelse null);
 
-    const known_folders_module = b.dependency("known_folders", .{}).module("known-folders");
-
-    const ansi_module = b.createModule(.{
-        .source_file = .{ .path = "src/ansi.zig" },
+    _ = b.addModule("ansi", .{
+        .root_source_file = b.path("src/ansi.zig"),
     });
 
     const zvm = b.addExecutable(.{
         .name = "zvm",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
-    zvm.addModule("known-folders", known_folders_module);
-    zvm.addModule("ansi", ansi_module);
-    zvm.addOptions("zvm_build_options", options);
     b.installArtifact(zvm);
 
     const run_cmd = b.addRunArtifact(zvm);
@@ -70,38 +65,37 @@ pub fn build(b: *std.Build) void {
     run_step.dependOn(&run_cmd.step);
 
     const test_step = b.step("test", "Run unit tests");
-    const arg_parser_test = registerTest(b, test_step, .{
-        .root_source_file = .{ .path = "src/arg_parser.zig" },
+    _ = registerTest(b, test_step, .{
+        .root_source_file = b.path("src/arg_parser.zig"),
         .target = target,
         .optimize = optimize,
     });
-    arg_parser_test.addModule("ansi", ansi_module);
 
     _ = registerTest(b, test_step, .{
-        .root_source_file = .{ .path = "src/index.zig" },
+        .root_source_file = b.path("src/index.zig"),
         .target = target,
         .optimize = optimize,
     });
     _ = registerTest(b, test_step, .{
-        .root_source_file = .{ .path = "src/ansi.zig" },
+        .root_source_file = b.path("src/ansi.zig"),
         .target = target,
         .optimize = optimize,
     });
     _ = registerTest(b, test_step, .{
-        .root_source_file = .{ .path = "src/utils.zig" },
+        .root_source_file = b.path("src/utils.zig"),
         .target = target,
         .optimize = optimize,
     });
 }
 
-inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.TestOptions) *std.Build.CompileStep {
+inline fn registerTest(b: *std.Build, step: *std.Build.Step, options: std.Build.TestOptions) *std.Build.Step.Compile {
     const exe_tests = b.addTest(options);
     step.dependOn(&exe_tests.step);
     return exe_tests;
 }
 
 fn gitCommitHash(allocator: std.mem.Allocator) ?[40]u8 {
-    const exec_result = std.ChildProcess.exec(.{
+    const exec_result = std.ChildProcess.run(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-parse", "--verify", "HEAD" },
     }) catch return null;
@@ -114,12 +108,12 @@ fn gitCommitHash(allocator: std.mem.Allocator) ?[40]u8 {
     if (exec_result.stderr.len != 0) return null;
 
     var output: [40]u8 = undefined;
-    std.mem.copy(u8, &output, exec_result.stdout[0..40]);
+    @memcpy(&output, exec_result.stdout[0..40]);
     return output;
 }
 
 fn gitCommitCount(allocator: std.mem.Allocator) ?u32 {
-    const exec_result = std.ChildProcess.exec(.{
+    const exec_result = std.ChildProcess.run(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-list", "--count", "HEAD" },
     }) catch return null;
@@ -139,7 +133,7 @@ fn gitCommitCount(allocator: std.mem.Allocator) ?u32 {
 }
 
 fn gitBranch(allocator: std.mem.Allocator) ?[]const u8 {
-    const exec_result = std.ChildProcess.exec(.{
+    const exec_result = std.ChildProcess.run(.{
         .allocator = allocator,
         .argv = &.{ "git", "rev-parse", "--abbrev-ref", "HEAD" },
     }) catch return null;
@@ -151,14 +145,14 @@ fn gitBranch(allocator: std.mem.Allocator) ?[]const u8 {
 
     const idx = std.mem.indexOf(u8, exec_result.stdout[0..], "\n") orelse return null;
     const allocated = allocator.alloc(u8, idx) catch return null;
-    std.mem.copy(u8, allocated, exec_result.stdout[0..allocated.len]);
+    @memcpy(allocated, exec_result.stdout[0..allocated.len]);
     return allocated;
 }
 
 const DATE_SIZE = 25;
 
 fn date(allocator: std.mem.Allocator) ?[DATE_SIZE]u8 {
-    const exec_result = std.ChildProcess.exec(.{
+    const exec_result = std.ChildProcess.run(.{
         .allocator = allocator,
         .argv = &.{ "date", "+%Y-%m-%d %H:%M:%S %z" },
     }) catch return null;
@@ -166,6 +160,6 @@ fn date(allocator: std.mem.Allocator) ?[DATE_SIZE]u8 {
     defer allocator.free(exec_result.stderr);
 
     var output: [DATE_SIZE]u8 = undefined;
-    std.mem.copy(u8, &output, exec_result.stdout[0..DATE_SIZE]);
+    @memcpy(&output, exec_result.stdout[0..DATE_SIZE]);
     return output;
 }

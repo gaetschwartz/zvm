@@ -52,38 +52,26 @@ pub fn fetchIndex(allocator: std.mem.Allocator) !Index {
     var client = http.Client{ .allocator = allocator };
     defer client.deinit();
     const uri = comptime try std.Uri.parse("https://ziglang.org/download/index.json");
-    var headers = http.Headers.init(allocator);
-    defer headers.deinit();
-    var req = try client.request(
-        .GET,
-        uri,
-        headers,
-        .{},
-    );
-    defer req.deinit();
-    try req.start();
-    try req.finish();
-    try req.wait();
-
-    // 500 kb
     var buffer = std.ArrayList(u8).init(allocator);
-    defer buffer.deinit();
 
-    var total_read: usize = 0;
-    var temp: [4096]u8 = undefined;
-    while (true) {
-        const read = try req.read(temp[0..]);
-        if (read == 0) break;
-        total_read += read;
-        try buffer.appendSlice(temp[0..read]);
+    const res = try client.fetch(.{
+        .method = .GET,
+        .location = .{
+            .uri = uri,
+        },
+        .response_storage = .{ .dynamic = &buffer },
+    });
+
+    if (res.status != .ok) {
+        return error.InvalidStatusCode;
     }
 
-    std.log.debug("total read: {d}\n", .{total_read});
+    std.log.debug("total read: {d}\n", .{buffer.items.len});
 
-    var tree = try std.json.parseFromSlice(Value, allocator, buffer.items[0..total_read], .{});
+    var tree = try std.json.parseFromSlice(Value, allocator, buffer.items, .{});
     defer tree.deinit();
 
-    var result = try parseTree(allocator, tree);
+    const result = try parseTree(allocator, tree);
 
     return result;
 }

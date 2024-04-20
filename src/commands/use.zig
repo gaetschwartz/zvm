@@ -172,7 +172,7 @@ pub fn version_complete(ctx: Command.CompletionContext) !std.ArrayList(Command.C
     const versions_path = try std.fs.path.join(allocator, &[_][]const u8{ zvm, "versions" });
     defer allocator.free(versions_path);
 
-    var dir = try std.fs.openIterableDirAbsolute(versions_path, .{});
+    var dir = try std.fs.openDirAbsolute(versions_path, .{ .iterate = true });
     defer dir.close();
     var iter = dir.iterate();
 

@@ -13,7 +13,7 @@ pub fn remove_cmd(ctx: RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
     defer arena.deinit();
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     const target = ctx.getPositional("target").?;
 

@@ -238,7 +238,7 @@ pub const ArgParser = struct {
     root_command: ?Command = null,
 
     pub fn init(allocator: std.mem.Allocator) ArgParser {
-        var args = std.ArrayList([]const u8).init(allocator);
+        const args = std.ArrayList([]const u8).init(allocator);
         return .{
             .allocator = allocator,
             .args = args,
@@ -336,7 +336,7 @@ pub const ArgParser = struct {
             command,
         ) catch |err| {
             stderr.print("Error parsing arguments: {any}\n", .{err}) catch {};
-            std.os.exit(1);
+            std.process.exit(1);
         };
         defer parsed_args.deinit();
 
@@ -345,7 +345,7 @@ pub const ArgParser = struct {
         {
             command.printHelp(std.io.getStdOut().writer()) catch |err| {
                 stderr.print("Error printing help: {any}\n", .{err}) catch {};
-                std.os.exit(1);
+                std.process.exit(1);
             };
             return;
         }
@@ -630,8 +630,8 @@ fn throw_handler(ctx: ArgParser.RunContext) !void {
 }
 
 test "parsing sample data" {
-    var allocator = std.testing.allocator;
-    var argv = &[_][]const u8{
+    const allocator = std.testing.allocator;
+    const argv = &[_][]const u8{
         "test",
         "command",
         "positional_value",
@@ -712,8 +712,8 @@ fn handler(ctx: ArgParser.RunContext) !void {
 }
 
 test "parsing " {
-    var allocator = std.testing.allocator;
-    var argv = &[_][]const u8{
+    const allocator = std.testing.allocator;
+    const argv = &[_][]const u8{
         "test",
         "command",
         "positional_value",
@@ -794,7 +794,7 @@ test "Simple fuzzing of parsing command line arguments" {
             var parser = ArgParser.init(allocator);
             defer parser.deinit();
 
-            var root_cmd_name = try std.fmt.allocPrint(allocator, "root", .{});
+            const root_cmd_name = try std.fmt.allocPrint(allocator, "root", .{});
 
             // run parser
             parser.setRootCommand(.{

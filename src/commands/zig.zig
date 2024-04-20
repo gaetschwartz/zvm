@@ -13,7 +13,7 @@ const builtin = @import("builtin");
 pub fn zig_cmd(ctx: ArgParser.RunContext) !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     defer arena.deinit();
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();

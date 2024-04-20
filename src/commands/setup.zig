@@ -16,7 +16,7 @@ pub fn setup_cmd(ctx: ArgParser.RunContext) !void {
     const stderr = std.io.getStdErr().writer();
 
     // try to infer shell
-    var shell = std.process.getEnvVarOwned(allocator, "SHELL") catch |err| switch (err) {
+    const shell = std.process.getEnvVarOwned(allocator, "SHELL") catch |err| switch (err) {
         error.EnvironmentVariableNotFound => {
             _ = try stderr.write(ansi.c(.red) ++ "Could not infer shell, please setup manually.\n" ++ ansi.c(.RESET));
             return;
@@ -24,7 +24,7 @@ pub fn setup_cmd(ctx: ArgParser.RunContext) !void {
         else => return err,
     };
 
-    var shellName = std.fs.path.basename(shell);
+    const shellName = std.fs.path.basename(shell);
     inline for (shells) |s| {
         if (std.mem.eql(u8, shellName, s.@"0")) {
             const setup: *const SetupFn = s.@"1";
@@ -50,8 +50,8 @@ fn setup_zsh(_: ArgParser.RunContext) SetupError!void {
     const allocator = arena.allocator();
     const zvm = try utils.zvmDir(allocator);
 
-    var home = try std.process.getEnvVarOwned(allocator, "HOME");
-    var zshrcPath = try std.fs.path.join(allocator, &[_][]const u8{ home, ".zshrc" });
+    const home = try std.process.getEnvVarOwned(allocator, "HOME");
+    const zshrcPath = try std.fs.path.join(allocator, &[_][]const u8{ home, ".zshrc" });
     const zshrc = try std.fs.openFileAbsolute(zshrcPath, .{ .mode = .read_write });
     defer zshrc.close();
 

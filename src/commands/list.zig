@@ -17,7 +17,7 @@ pub const VersionInfo = struct {
 pub fn list_cmd(ctx: ArgParser.RunContext) !void {
     _ = ctx;
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     defer arena.deinit();
     const stdout = std.io.getStdOut().writer();
     const stderr = std.io.getStdErr().writer();
@@ -43,7 +43,7 @@ pub fn list_cmd(ctx: ArgParser.RunContext) !void {
 
     const versions = try path.join(allocator, &[_][]const u8{ zvm, "versions" });
 
-    var dir = std.fs.openIterableDirAbsolute(versions, .{}) catch |err| {
+    var dir = std.fs.openDirAbsolute(versions, .{ .iterate = true }) catch |err| {
         switch (err) {
             error.FileNotFound => {
                 try stdout.print("No versions installed\x0a", .{});
@@ -121,7 +121,7 @@ fn printGitVersion(zvm: []const u8, symlinked_path: ?[]const u8) !void {
             }
 
             // exec zig version
-            const res = try std.ChildProcess.exec(.{ .allocator = allocator, .argv = &[_][]const u8{ zig_path, "version" } });
+            const res = try std.ChildProcess.run(.{ .allocator = allocator, .argv = &[_][]const u8{ zig_path, "version" } });
             defer allocator.free(res.stdout);
             defer allocator.free(res.stderr);
 

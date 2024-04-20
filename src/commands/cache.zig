@@ -15,12 +15,8 @@ pub fn cache_clear_cmd(ctx: ArgParser.RunContext) !void {
     _ = ctx;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     defer arena.deinit();
-    const stdout = std.io.getStdOut().writer();
-    _ = stdout;
-    const stderr = std.io.getStdErr().writer();
-    _ = stderr;
 
     const zvm = try zvmDir(allocator);
     const cache = try path.join(allocator, &[_][]const u8{ zvm, "cache" });
@@ -31,15 +27,13 @@ pub fn cache_size_cmd(ctx: ArgParser.RunContext) !void {
     _ = ctx;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     defer arena.deinit();
     const stdout = std.io.getStdOut().writer();
-    const stderr = std.io.getStdErr().writer();
-    _ = stderr;
 
     const zvm = try zvmDir(allocator);
     const cache = try path.join(allocator, &[_][]const u8{ zvm, "cache" });
-    const cache_dir = std.fs.openIterableDirAbsolute(cache, .{}) catch |err| switch (err) {
+    const cache_dir = std.fs.openDirAbsolute(cache, .{ .iterate = true }) catch |err| switch (err) {
         error.FileNotFound => {
             try stdout.print(ansi.style("The cache is empty.\n", .cyan), .{});
             return;

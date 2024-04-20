@@ -23,10 +23,10 @@ pub fn releases_cmd(ctx: RunContext) !void {
     const reverse = ctx.hasFlag("reverse");
     const raw = ctx.hasFlag("raw");
 
-    var index = try idx.fetchIndex(allocator);
+    const index = try idx.fetchIndex(allocator);
 
     if (!raw) try stdout.print("Available releases:\n", .{});
-    var releases = index.releases;
+    const releases = index.releases;
     if (reverse) std.mem.reverse(Release, releases);
     if (raw) {
         for (releases) |release| {

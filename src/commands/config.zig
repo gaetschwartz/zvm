@@ -32,7 +32,7 @@ const descriptions = std.ComptimeStringMap([]const u8, .{
 
 comptime {
     const typeInfo = @typeInfo(ZvmConfig);
-    inline for (typeInfo.Struct.fields) |field| {
+    for (typeInfo.Struct.fields) |field| {
         if (!descriptions.has(field.name)) {
             @compileError("Missing description for field: " ++ field.name);
         }

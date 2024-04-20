@@ -23,7 +23,7 @@ fn zvm_completions(ctx: ArgParser.RunContext) !void {
     const stdout = std.io.getStdOut().writer();
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
 
     defer arena.deinit();
     var root = ctx.command;

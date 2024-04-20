@@ -48,7 +48,7 @@ pub const WordsIterator = struct {
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     defer arena.deinit();
     var parser = try createParser(allocator);
     defer parser.deinit();
@@ -64,7 +64,7 @@ pub fn main() !void {
     while (args.next()) |arg| {
         try arr.append(arg);
     }
-    var compWords = try arr.toOwnedSlice();
+    const compWords = try arr.toOwnedSlice();
     var split = WordsIterator.init(compWords);
     std.log.debug("completing for \"{s}\"", .{compWords});
 

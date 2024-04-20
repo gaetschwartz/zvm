@@ -14,7 +14,7 @@ const windows = @import("os/windows.zig");
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var arena = std.heap.ArenaAllocator.init(gpa.allocator());
-    var allocator = arena.allocator();
+    const allocator = arena.allocator();
     // parse args
     var parser = try createParser(allocator);
     defer parser.deinit();
